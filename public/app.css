@@ -2,3 +2,4 @@
 
 .vehicle-marker{width:64px;height:64px;display:grid;place-items:center;pointer-events:none;border-radius:50%;background:radial-gradient(ellipse,#2467e826 15%,#2467e810 48%,transparent 70%)}.vehicle-marker img{display:block;filter:drop-shadow(0 3px 3px #18376355)}
 
+.ai-emblem{position:absolute;left:12px;bottom:84px;width:96px;height:96px;z-index:1;pointer-events:none;user-select:none;-webkit-user-select:none}@media(max-width:650px){.ai-emblem{left:8px;bottom:80px;width:88px;height:88px}}@media(max-height:540px){.ai-emblem{bottom:48px;width:80px;height:80px}}
