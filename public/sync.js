@@ -5,6 +5,16 @@ export async function request(path,{auth,method='GET',data,role='admin'}={}){
   try{
     const response=await fetch(path,{method,cache:'no-store',signal:controller.signal,headers:{...(method==='POST'?{'Content-Type':'application/json'}:{}),...(auth?{'X-Coast-Token':auth.token,'X-Coast-Role':role}:{})},...(data?{body:JSON.stringify(data)}:{})});
     const result=await response.json();if(!response.ok){const error=new Error(result.error||'요청에 실패했습니다.');error.status=response.status;throw error;}return result;
+  }catch(error){
+    if(controller.signal.aborted){
+      const timeout=new Error('서버 응답이 지연되어 요청 결과를 확인하지 못했습니다. 연결 상태를 확인해 주세요.');
+      timeout.code='REQUEST_TIMEOUT';throw timeout;
+    }
+    if(error instanceof TypeError&&!error.status){
+      const connection=new Error('서버에 연결하지 못했습니다. 네트워크 연결을 확인해 주세요.');
+      connection.code='CONNECTION_ERROR';throw connection;
+    }
+    throw error;
   }finally{clearTimeout(timer);}
 }
 export const endpoint=(auth,operation)=>`/api/sessions/${auth.id}/${operation}`;
