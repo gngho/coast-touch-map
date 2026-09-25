@@ -1,5 +1,15 @@
 # Coast · 캘리포니아 해안
 
+## 2.0 연구 실험용 확장
+
+현재 버전은 참가자용 `/`와 진행자용 `/admin`, Sites Worker API 및 D1 저장소를 포함합니다. 12조건 선택, 단일 iPad 연결, Cue 제시·터치, 수동 애니메이션 제어, 시행·이벤트 로그와 CSV/JSON 내보내기를 지원합니다. 음성은 별도 프로그램에서 진행자가 재생합니다. 상세 운영은 [OPERATING.md](OPERATING.md), 검증 범위는 [VALIDATION.md](VALIDATION.md)를 참고하세요.
+
+로컬 개발은 Node.js 24 이상에서 `npm ci`, `node server.mjs`로 실행합니다. http://127.0.0.1:4173/admin 과 http://127.0.0.1:4173/ 을 사용합니다. 로컬 프리뷰는 loopback에만 바인딩하고 테스트 소유자 계정을 사용합니다. 운영 Worker에는 이 인증 우회가 포함되지 않습니다. 테스트 데이터는 무시된 `.sites-runtime/coast.sqlite`에만 저장되어 배포에 포함되지 않습니다.
+
+`node --test tests/*.test.mjs`로 검증하고 `node build.mjs`로 Worker와 UI·마이그레이션을 생성합니다. 변경된 스키마는 `npm run db:generate`로 새 마이그레이션을 생성합니다. 이미 배포된 마이그레이션은 수정하지 않습니다. `.openai/hosting.json`의 기존 project_id와 비공개 접근 정책을 유지합니다.
+
+아래는 1차 지도 제작 기록입니다.
+
 iPad Air 11형(M3)을 위한 Pleos 스타일의 지도 중심 터치 화면입니다. 실제 캘리포니아 빅서 해안 지도를 표시합니다.
 
 ## 사용

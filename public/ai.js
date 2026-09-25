@@ -1,5 +1,6 @@
 // Visual state preview only. No microphone, audio, or network connection.
-export function initializeAiWidget() {
+export function initializeAiWidget({onTouch = () => {}} = {}) {
+  let experiment = false;
   const widget = document.getElementById('ai-widget');
   const toggle = document.getElementById('ai-toggle');
   const panel = document.getElementById('ai-panel');
@@ -14,6 +15,7 @@ export function initializeAiWidget() {
   }
 
   toggle.addEventListener('click', () => {
+    if (experiment) { onTouch(); return; }
     if (!panel.hidden) return close();
     panel.hidden = false;
     toggle.setAttribute('aria-expanded', 'true');
@@ -46,4 +48,18 @@ export function initializeAiWidget() {
   document.addEventListener('focusin', event => {
     if (!widget.contains(event.target)) close();
   });
+  return {
+    setMode(value) {
+      if(experiment===value)return;experiment=value;widget.dataset.mode=value?'experiment':'setup';close();
+      if(value){toggle.removeAttribute('aria-expanded');toggle.removeAttribute('aria-controls');}
+      else{toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-controls','ai-panel');}
+      toggle.setAttribute('aria-label',value?'AI 탐색 요청':`AI ${labels[widget.dataset.state]} · 상태 미리보기`);
+    },
+    setVisible(value) { widget.hidden=!value; },
+    setState(state) {
+      widget.dataset.state=state;label.textContent=labels[state];
+      toggle.setAttribute('aria-label',experiment?'AI 탐색 요청':`AI ${labels[state]} · 상태 미리보기`);
+      for (const choice of choices) choice.setAttribute('aria-pressed',String(choice.dataset.aiState===state));
+    }
+  };
 }

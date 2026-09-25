@@ -1,4 +1,7 @@
 .ai-widget{position:absolute;left:12px;bottom:84px;z-index:3;width:96px;user-select:none;-webkit-user-select:none}
+[hidden]{display:none!important}
+.ai-widget[data-mode="experiment"] .ai-state-label{display:none}
+.pairing{padding:20px 0;border-bottom:1px solid var(--line)}.pairing h3{font-size:17px}.pairing p,.pairing a{font-size:14px;line-height:1.6;color:#627385}.pairing label{display:block;font-size:14px;margin:14px 0 8px}.pair-fields{display:flex;gap:8px}.pair-fields input{min-width:0;width:100%;padding:12px;font:inherit;border:1px solid #d7e0eb;border-radius:12px;letter-spacing:4px}.pair-fields button{min-height:48px;min-width:72px;border:0;border-radius:12px;background:#edf3ff;color:var(--blue)}
 .ai-toggle{position:relative;display:grid;place-items:center;width:96px;height:104px;padding:0 0 8px;border:0;border-radius:24px;background:transparent;touch-action:manipulation}
 .ai-symbol{display:block;width:96px;height:96px;pointer-events:none;transform-origin:center;animation:ai-idle 4.8s ease-in-out infinite}
 .ai-state-label{position:absolute;bottom:0;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:11px;font-weight:550;letter-spacing:.2px;color:#49647a}

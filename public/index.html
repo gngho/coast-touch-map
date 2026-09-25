@@ -35,7 +35,7 @@
     </header>
     <main class="map-area" aria-label="해안 지도">
       <div id="map" aria-label="캘리포니아 해안 터치 지도"></div>
-      <div id="ai-widget" class="ai-widget" data-state="idle">
+      <div id="ai-widget" class="ai-widget" data-state="idle" hidden>
         <button id="ai-toggle" class="ai-toggle" aria-label="AI 대기 · 상태 미리보기" aria-expanded="false" aria-controls="ai-panel">
           <span class="ai-ring" aria-hidden="true"></span>
           <img class="ai-symbol" src="./icons/gemini-astroid.svg" width="96" height="96" alt="" draggable="false">
@@ -68,9 +68,11 @@
   <dialog id="settings" aria-labelledby="settings-title">
     <div class="settings-header"><div><p class="eyebrow">PREFERENCES</p><h2 id="settings-title">지도 설정</h2></div><button id="settings-close" class="icon-button" aria-label="설정 닫기"><svg><use href="#i-close"/></svg></button></div>
     <div class="settings-body">
+      <div class="setting-row"><div><label for="ai-visible">AI 아이콘 표시</label><p>준비 모드에서 상태를 미리 봅니다.</p></div><input id="ai-visible" type="checkbox" role="switch"></div>
+      <section class="pairing"><h3>진행자 PC 연결</h3><p>PC의 진행자 화면에서 생성한 코드를 입력하세요.</p><form id="pair-form"><label for="pair-code">6자리 연결 코드</label><div class="pair-fields"><input id="pair-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" placeholder="000000" required><button type="submit">연결</button></div></form><p id="pair-status" role="status">연결되지 않음</p><a href="/admin" target="_blank" rel="noopener">진행자 화면 열기</a></section>
       <div class="setting-row"><div><label for="labels">지명 표시</label><p>도로와 지역의 이름을 표시합니다.</p></div><input id="labels" type="checkbox" role="switch" checked></div>
       <button id="settings-reset" class="reset-row"><span><strong>지도 초기화</strong><small>처음 해안 구간과 배율로 돌아갑니다.</small></span><svg><use href="#i-reset"/></svg></button>
-      <section class="about"><p class="eyebrow">ABOUT THIS MAP</p><h3>캘리포니아 해안</h3><p>빅서의 해안 도로를 자유롭게 둘러보세요.<br>한 손가락으로 이동하고 두 손가락으로 확대할 수 있습니다.</p><div class="about-divider"></div><p>Coast 1.1 · 개인용 지도 화면<br>차량과 경로는 고정된 데모 표시입니다.<br>Pleos 디자인을 참고한 독립 프로젝트입니다.<br>현대자동차 및 Slow Roads와 연결되어 있지 않습니다.</p><p class="source-links"><a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">OpenFreeMap</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noopener noreferrer">© OpenMapTiles</a><br><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a><br>지도 스타일: <a href="https://github.com/openmaptiles/positron-gl-style" target="_blank" rel="noopener noreferrer">Positron</a> · 색상 및 지명 표시 수정<br><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a> · 원본 디자인 © CARTO, Stamen, Paul Norman</p></section>
+      <section class="about"><p class="eyebrow">ABOUT THIS MAP</p><h3>캘리포니아 해안</h3><p>빅서의 해안 도로를 자유롭게 둘러보세요.<br>한 손가락으로 이동하고 두 손가락으로 확대할 수 있습니다.</p><div class="about-divider"></div><p>Coast 2.0 · 연구용 지도 화면<br>차량과 경로는 고정된 데모 표시입니다.<br>Pleos 디자인을 참고한 독립 프로젝트입니다.<br>현대자동차 및 Slow Roads와 연결되어 있지 않습니다.</p><p class="source-links"><a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">OpenFreeMap</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noopener noreferrer">© OpenMapTiles</a><br><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a><br>지도 스타일: <a href="https://github.com/openmaptiles/positron-gl-style" target="_blank" rel="noopener noreferrer">Positron</a> · 색상 및 지명 표시 수정<br><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a> · 원본 디자인 © CARTO, Stamen, Paul Norman</p></section>
     </div>
   </dialog>
   <noscript>지도를 사용하려면 브라우저의 JavaScript를 켜 주세요.</noscript>
