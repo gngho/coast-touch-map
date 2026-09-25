@@ -44,3 +44,8 @@ Windows Edge에서 1180×820 및 820×1180 CSS px, 터치 에뮬레이션으로 
 - Positron 스타일: public/styles/STYLE-LICENSE.md 및 POSITRON-LICENSE.md. 색상과 영어 지명 표현을 수정했습니다.
 
 현대자동차 및 Slow Roads의 공식 제품이 아닌 독립 프로젝트입니다.
+
+## 1.1 업데이트
+
+상단의 지역 제목을 제거했습니다. Cabrillo Highway 약 9.5km 구간의 실제 도로 형상을 따라 파란 경로선과 정지된 데모 차량 아이콘을 표시합니다. OSRM에서 얻은 OpenStreetMap 기반 경로를 public/route-data.js에 저장했으며 실행 중에는 경로 서비스에 요청하지 않습니다. 지명 설정은 경로와 차량 표시를 숨기지 않습니다. 실제 GPS나 게임 위치는 아닙니다.
+
