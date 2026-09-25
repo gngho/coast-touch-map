@@ -40,7 +40,10 @@ export function initializeAiWidget() {
       close(true);
     }
   });
-  widget.addEventListener('focusout', event => {
-    if (!widget.contains(event.relatedTarget)) close();
+  // Safari can blur a button with relatedTarget=null before a touch generates
+  // click. Closing on that blur removes the tapped button too early. Dismiss
+  // only when focus actually lands outside; pointerdown handles outside taps.
+  document.addEventListener('focusin', event => {
+    if (!widget.contains(event.target)) close();
   });
 }
