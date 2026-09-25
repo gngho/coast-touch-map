@@ -1,5 +1,7 @@
 import{createCoastMap}from'./map.js';
 import{readLabels,saveLabels}from'./state.js';
+import{initializeAiWidget}from'./ai.js';
+initializeAiWidget();
 const $=id=>document.getElementById(id);
 const clock=()=>{$('clock').textContent=new Intl.DateTimeFormat('ko-KR',{hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date());$('clock').dateTime=new Date().toISOString();};
 clock();setInterval(clock,15000);

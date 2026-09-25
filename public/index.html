@@ -14,6 +14,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./vendor/maplibre-gl.css">
   <link rel="stylesheet" href="./app.css">
+  <link rel="stylesheet" href="./ai.css">
   <script src="./vendor/maplibre-gl.js" defer></script>
   <script type="module" src="./app.js"></script>
 </head>
@@ -34,7 +35,23 @@
     </header>
     <main class="map-area" aria-label="해안 지도">
       <div id="map" aria-label="캘리포니아 해안 터치 지도"></div>
-      <img class="ai-emblem" src="./icons/gemini-astroid.svg" width="96" height="96" alt="AI 아이콘" draggable="false">
+      <div id="ai-widget" class="ai-widget" data-state="idle">
+        <button id="ai-toggle" class="ai-toggle" aria-label="AI 대기 · 상태 미리보기" aria-expanded="false" aria-controls="ai-panel">
+          <span class="ai-ring" aria-hidden="true"></span>
+          <img class="ai-symbol" src="./icons/gemini-astroid.svg" width="96" height="96" alt="" draggable="false">
+          <span id="ai-state-label" class="ai-state-label" aria-live="polite">대기</span>
+        </button>
+        <section id="ai-panel" class="ai-panel" aria-labelledby="ai-title" hidden>
+          <div class="ai-panel-heading"><h2 id="ai-title">상태 미리보기</h2><button id="ai-close" aria-label="상태 미리보기 닫기">×</button></div>
+          <div class="ai-options" role="group" aria-label="AI 움직임 선택">
+            <button data-ai-state="idle" aria-pressed="true"><span>대기</span><small>Idle</small></button>
+            <button data-ai-state="listening" aria-pressed="false"><span>듣는 중</span><small>Listening</small></button>
+            <button data-ai-state="thinking" aria-pressed="false"><span>생각 중</span><small>Thinking</small></button>
+            <button data-ai-state="speaking" aria-pressed="false"><span>말하는 중</span><small>Speaking</small></button>
+          </div>
+          <p>음성 연결 없이 움직임을 미리 볼 수 있어요.</p>
+        </section>
+      </div>
       <div class="north" aria-label="북쪽 위"><span>N</span><span class="north-needle"></span></div>
       <div class="map-controls" aria-label="지도 조작">
         <div class="zoom-group"><button id="zoom-in" class="icon-button" aria-label="확대"><svg><use href="#i-plus"/></svg></button><span></span><button id="zoom-out" class="icon-button" aria-label="축소"><svg><use href="#i-minus"/></svg></button></div>
