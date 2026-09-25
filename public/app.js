@@ -1,0 +1,18 @@
+import{createCoastMap}from'./map.js';
+import{readLabels,saveLabels}from'./state.js';
+const $=id=>document.getElementById(id);
+const clock=()=>{$('clock').textContent=new Intl.DateTimeFormat('ko-KR',{hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date());$('clock').dateTime=new Date().toISOString();};
+clock();setInterval(clock,15000);
+$('labels').checked=readLabels();
+const coast=createCoastMap({labels:$('labels').checked,onStatus(state){$('map-status').hidden=state==='ready';$('status-text').textContent=state==='loading'?'지도를 불러오는 중…':'지도를 불러오지 못했어요. 연결을 확인해 주세요.';$('retry').hidden=state!=='error';},onZoom(zoom){$('zoom-in').disabled=zoom>=18;$('zoom-out').disabled=zoom<=5;}});
+$('zoom-in').onclick=()=>coast.zoomBy(1);
+$('zoom-out').onclick=()=>coast.zoomBy(-1);
+$('reset-view').onclick=()=>coast.reset();
+$('retry').onclick=()=>coast.retry();
+$('settings-open').onclick=()=>{$('settings').showModal();$('settings-open').classList.add('selected');$('map-tab').classList.remove('selected');};
+$('settings-close').onclick=()=>$('settings').close();
+$('settings').addEventListener('click',event=>{if(event.target===$('settings')&&event.clientX<$('settings').getBoundingClientRect().left)$('settings').close();});
+$('settings').addEventListener('close',()=>{$('settings-open').classList.remove('selected');$('map-tab').classList.add('selected');$('settings-open').focus();});
+$('map-tab').onclick=()=>{if($('settings').open)$('settings').close();};
+$('settings-reset').onclick=()=>{coast.reset();$('settings').close();};
+$('labels').onchange=()=>{saveLabels($('labels').checked);coast.setLabels($('labels').checked);};

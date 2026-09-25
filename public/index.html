@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Coast">
+  <meta name="description" content="캘리포니아 해안을 터치로 탐색하는 개인용 지도.">
+  <title>Coast · 캘리포니아 해안</title>
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./vendor/maplibre-gl.css">
+  <link rel="stylesheet" href="./app.css">
+  <script src="./vendor/maplibre-gl.js" defer></script>
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Z M9 3v16 M15 5v16"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="m9.5 3-.7 2.3-2 .9-2.2-.5-2 3.5L4.3 11v2l-1.7 1.8 2 3.5 2.2-.5 2 .9.7 2.3h5l.7-2.3 2-.9 2.2.5 2-3.5-1.7-1.8v-2l1.7-1.8-2-3.5-2.2.5-2-.9L14.5 3h-5Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m4 10 8-7 8 7v10h-6v-6h-4v6H4V10Z"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14 M5 12h14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12 M18 6 6 18"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 9a8 8 0 1 1 0 6 M4 3v6h6"/></symbol>
+  </defs></svg>
+  <div class="screen">
+    <header class="statusbar">
+      <div class="place"><span class="coast-mark" aria-hidden="true">C<span>↗</span></span><div><h1>캘리포니아 해안</h1><p>CALIFORNIA COAST</p></div></div>
+      <time id="clock" aria-label="현재 시각"></time>
+    </header>
+    <main class="map-area" aria-label="해안 지도">
+      <div id="map" aria-label="캘리포니아 해안 터치 지도"></div>
+      <div class="north" aria-label="북쪽 위"><span>N</span><span class="north-needle"></span></div>
+      <div class="map-controls" aria-label="지도 조작">
+        <div class="zoom-group"><button id="zoom-in" class="icon-button" aria-label="확대"><svg><use href="#i-plus"/></svg></button><span></span><button id="zoom-out" class="icon-button" aria-label="축소"><svg><use href="#i-minus"/></svg></button></div>
+        <button id="reset-view" class="icon-button home-button" aria-label="처음 위치로 돌아가기"><svg><use href="#i-home"/></svg></button>
+      </div>
+      <div id="map-status" class="map-status" role="status"><span id="status-text">지도를 불러오는 중…</span><button id="retry" hidden>다시 시도</button></div>
+    </main>
+    <nav class="dock" aria-label="주 메뉴">
+      <span class="dock-brand" aria-hidden="true">coast<span> .</span></span>
+      <div class="dock-actions"><button id="map-tab" class="dock-button selected" aria-current="page"><svg><use href="#i-map"/></svg><span>지도</span></button><button id="settings-open" class="dock-button" aria-haspopup="dialog"><svg><use href="#i-settings"/></svg><span>설정</span></button></div>
+      <span class="dock-detail" aria-hidden="true">PACIFIC COAST<br><b>36°22′ N · 121°54′ W</b></span>
+    </nav>
+  </div>
+  <dialog id="settings" aria-labelledby="settings-title">
+    <div class="settings-header"><div><p class="eyebrow">PREFERENCES</p><h2 id="settings-title">지도 설정</h2></div><button id="settings-close" class="icon-button" aria-label="설정 닫기"><svg><use href="#i-close"/></svg></button></div>
+    <div class="settings-body">
+      <div class="setting-row"><div><label for="labels">지명 표시</label><p>도로와 지역의 이름을 표시합니다.</p></div><input id="labels" type="checkbox" role="switch" checked></div>
+      <button id="settings-reset" class="reset-row"><span><strong>지도 초기화</strong><small>처음 해안 구간과 배율로 돌아갑니다.</small></span><svg><use href="#i-reset"/></svg></button>
+      <section class="about"><p class="eyebrow">ABOUT THIS MAP</p><h3>캘리포니아 해안</h3><p>빅서의 해안 도로를 자유롭게 둘러보세요.<br>한 손가락으로 이동하고 두 손가락으로 확대할 수 있습니다.</p><div class="about-divider"></div><p>Coast 1.0 · 개인용 지도 화면<br>Pleos 디자인을 참고한 독립 프로젝트입니다.<br>현대자동차 및 Slow Roads와 연결되어 있지 않습니다.</p><p class="source-links"><a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">OpenFreeMap</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noopener noreferrer">© OpenMapTiles</a><br><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a><br>지도 스타일: <a href="https://github.com/openmaptiles/positron-gl-style" target="_blank" rel="noopener noreferrer">Positron</a> · 색상 및 지명 표시 수정<br><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a> · 원본 디자인 © CARTO, Stamen, Paul Norman</p></section>
+    </div>
+  </dialog>
+  <noscript>지도를 사용하려면 브라우저의 JavaScript를 켜 주세요.</noscript>
+</body>
+</html>
