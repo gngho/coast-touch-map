@@ -64,7 +64,7 @@ export async function api(request,env){
       requireThat(result.meta.changes===1,'이미 다른 iPad가 연결되었습니다.',409);
       return json({...view(await first(db,'SELECT * FROM sessions WHERE id=?',row.id)),deviceToken});
     }
-    const match=path.match(/^\/api\/sessions\/([\w-]+)\/(state|code|command|event|rejoin|export)$/);requireThat(match,'요청한 기능이 없습니다.',404);
+    const match=path.match(/^\/api\/sessions\/([\w-]+)\/(state|code|command|event|audio-event|rejoin|export)$/);requireThat(match,'요청한 기능이 없습니다.',404);
     const [,id,operation]=match,role=request.headers.get('x-coast-role');requireThat(['admin','device'].includes(role),'접근 역할을 확인해 주세요.',403);
     let row=await authorized(db,id,user,secret,role);
     if(operation==='state'&&!post){
@@ -86,13 +86,24 @@ export async function api(request,env){
     }
     if(operation==='command'&&post){
       requireThat(role==='admin','진행자만 화면을 제어할 수 있습니다.',403);
-      requireThat(['prepare','start','end','abort','setup','show_cue','set_icon','resume','note','unpair'].includes(data.action),'잘못된 조작입니다.');
+      requireThat(['prepare','start','end','abort','setup','show_cue','set_icon','resume','note','unpair','begin_audio'].includes(data.action),'잘못된 조작입니다.');
       row=await commit(db,row,data.id,data.action,data,'admin');
       if(data.action==='unpair'){
         await query(db,'UPDATE sessions SET device_hash=NULL,page_id=NULL,device_seen=0,applied_generation=-1 WHERE id=?',id).run();
         row=await first(db,'SELECT * FROM sessions WHERE id=?',id);
       }
       return json(view(row));
+    }
+    if(operation==='audio-event'&&post){
+      requireThat(role==='admin','진행자만 재생 기록을 전송할 수 있습니다.',403);
+      requireThat(validId(data.id)&&validId(data.runId)&&validId(data.pageId),'재생 이벤트를 확인해 주세요.');
+      requireThat(['audio_started','audio_ended','operator_confirm','audio_flow_complete','audio_flow_stopped','audio_flow_error'].includes(data.type),'지원하지 않는 재생 이벤트입니다.');
+      const run=await first(db,"SELECT trial_id,payload FROM events WHERE id=? AND session_id=? AND type='begin_audio'",data.runId,id);
+      requireThat(run&&run.trial_id===data.trialId&&JSON.parse(run.payload).pageId===data.pageId,'다른 시행 또는 화면의 재생 기록입니다.',403);
+      requireThat(Number.isFinite(data.monotonicMs)&&data.monotonicMs>=0&&typeof data.clientTime==='string'&&Number.isFinite(Date.parse(data.clientTime)),'재생 시점을 확인해 주세요.');
+      const detail=data.detail||{};requireThat(JSON.stringify(detail).length<=3000,'재생 기록이 너무 깁니다.');
+      await query(db,'INSERT OR IGNORE INTO events (id,session_id,trial_id,type,actor,server_time,client_time,page_id,generation,payload) VALUES (?,?,?,?,?,?,?,?,?,?)',data.id,id,data.trialId,data.type,'admin',now(),data.clientTime.slice(0,40),data.pageId,Number.isInteger(data.generation)?data.generation:0,JSON.stringify({...detail,runId:data.runId,monotonicMs:data.monotonicMs})).run();
+      return json({saved:true});
     }
     if(operation==='rejoin'&&post){
       requireThat(role==='device'&&validId(data.pageId),'iPad 연결 요청을 확인해 주세요.',403);
@@ -124,7 +135,7 @@ export async function api(request,env){
       const trials=(await query(db,'SELECT * FROM trials WHERE session_id=? ORDER BY number',id).all()).results;
       const events=(await query(db,'SELECT * FROM events WHERE session_id=? ORDER BY server_time,id',id).all()).results.map(e=>({...e,payload:JSON.parse(e.payload)}));
       const format=url.searchParams.get('format');
-      if(format==='json')return json({appVersion:VERSION,exportedAt:new Date().toISOString(),timingNote:'iPad-local display-to-touch interval; not physical onset or voice response time.',trials,events});
+      if(format==='json')return json({appVersion:VERSION,exportedAt:new Date().toISOString(),timingNote:'Cue RT is iPad-local display-to-touch. Audio timestamps are PC browser callbacks, not TV acoustic onset. Operator confirmation is not measured participant speech onset. Monotonic clocks are page-local; do not subtract across devices.',trials,events});
       const kind=url.searchParams.get('kind')==='trials'?'trials':'events',rows=kind==='trials'?trials:events;
       const columns=kind==='trials'?['id','number','participant','relationship','intervention','scenario','app_version','status','prepared_at','started_at','ended_at']:['id','trial_id','type','actor','server_time','client_time','page_id','generation','payload'];
       return new Response(csv(rows,columns),{headers:{'Content-Type':'text/csv; charset=utf-8','Cache-Control':'no-store','Content-Disposition':`attachment; filename="coast-${kind}.csv"`}});

@@ -99,3 +99,25 @@ test('concurrent retries produce one command event and CSV preserves Unicode not
     assert.equal((await f.call(f.path('state'),{auth:f.admin})).status,403);
   }finally{f.close();}
 });
+
+test('audio claims are once per trial; authenticated logs are idempotent and remain attached after trial end',async()=>{
+  const f=await fixture();try{
+    await f.start('coworker','suggestion');
+    const id=uid(),pageId=uid(),asset={name:'시험음원.wav',duration:1,sha256:'a'.repeat(64)},assets={dialogue:asset,prompt:asset,answer:asset};
+    assert.equal((await f.command('begin_audio',{pageId,delayMs:1000,assets:{dialogue:asset,answer:asset}})).status,400);
+    assert.equal((await f.command('begin_audio',{pageId,delayMs:1000,assets},id)).status,200);
+    assert.equal((await f.command('begin_audio',{pageId,delayMs:1000,assets})).status,409);
+    assert.equal((await f.command('begin_audio',{pageId,delayMs:1000,assets},id)).status,200);
+    const trialId=f.state.trial.id;
+    const event={id:uid(),trialId,runId:id,pageId,type:'operator_confirm',clientTime:new Date().toISOString(),monotonicMs:123,generation:f.state.generation,detail:{source:'Space'}};
+    assert.equal((await f.call(f.path('audio-event'),{auth:f.device,role:'device',data:event})).status,403);
+    assert.equal((await f.call(f.path('audio-event'),{auth:f.admin,data:{...event,pageId:uid()}})).status,403);
+    assert.equal((await f.call(f.path('audio-event'),{auth:f.admin,data:{...event,trialId:uid()}})).status,403);
+    await f.command('end');
+    for(let i=0;i<2;i++)assert.equal((await f.call(f.path('audio-event'),{auth:f.admin,data:event})).status,200);
+    const data=await f.call(f.path('export?format=json'),{auth:f.admin});
+    assert.equal(data.result.events.filter(e=>e.type==='begin_audio').length,1);assert.equal(data.result.events.filter(e=>e.type==='operator_confirm').length,1);
+    assert.equal(data.result.events.find(e=>e.type==='operator_confirm').trial_id,trialId);
+    await f.start('friend','reactive');assert.equal(f.state.audioRun,null);
+  }finally{f.close();}
+});

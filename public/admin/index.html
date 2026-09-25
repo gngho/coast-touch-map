@@ -1,5 +1,5 @@
 <!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Coast · 실험 제어</title><link rel="icon" href="/icons/icon.svg"><link rel="stylesheet" href="/admin/admin.css"><script type="module" src="/admin/admin.js"></script></head><body>
-<header class="top"><a class="brand" href="/" target="_blank" rel="noopener">coast<span> .</span></a><span class="workspace">RESEARCH WORKSPACE</span><span class="version">실험 제어 · 2.0</span></header>
+<header class="top"><a class="brand" href="/" target="_blank" rel="noopener">coast<span> .</span></a><span class="workspace">RESEARCH WORKSPACE</span><span class="version">실험 제어 · 2.1</span></header>
 <main><div class="page-heading"><div><p class="eyebrow">HUMAN–AI INTERACTION</p><h1>실험 제어</h1><p>조건을 준비하고, 참가자 화면의 개입 시점을 제어하세요.</p></div><div class="exports"><button data-export="trials">시행 CSV</button><button data-export="events">이벤트 CSV</button><button data-export="json">전체 JSON</button></div></div>
 <div id="notice" class="notice" role="status">진행자 세션을 준비하고 있습니다.</div>
 <section class="connection card"><div><span class="eyebrow">PARTICIPANT DISPLAY</span><h2 id="connection-status">iPad 연결 대기</h2><p id="connection-detail">iPad의 설정에서 연결 코드를 입력하세요.</p></div><div id="pair-code-area"><button id="create-code" class="primary">연결 코드 생성</button><div id="code" aria-live="polite"></div><small id="code-expiry"></small></div><div class="connection-actions"><button id="resume" hidden class="primary">연결 재개</button><button id="recover" hidden>진행자 세션 복구</button><button id="unpair" hidden>iPad 연결 해제</button></div></section>
@@ -14,6 +14,21 @@
 <div class="readouts"><div><small>iPad 화면 반영</small><strong id="applied">대기</strong></div><div><small>Cue 첫 터치</small><strong id="touched">—</strong></div><div><small>미전송 로그</small><strong id="pending">확인 대기</strong></div></div>
 <div class="trial-actions"><button id="start" class="primary">시행 시작</button><button id="end">시행 종료</button><button id="abort" class="danger">중단</button></div>
 <div class="cue-control"><div class="cue-heading"><h3>Cue 조작</h3><span id="cue-help">Proactive cue 조건에서 사용</span></div><button id="show-cue" class="cue-button">Cue 표시</button><div class="state-buttons"><button data-icon="listening">Listening<span>듣는 중</span></button><button data-icon="thinking">Thinking<span>생각 중</span></button><button data-icon="speaking">Speaking<span>말하는 중</span></button><button data-icon="hidden">숨김<span>지도만 표시</span></button></div></div>
-<div class="control-footer"><p>음성은 별도 프로그램에서 재생하세요.<br>이 화면의 상태 변경은 녹음을 재생하거나 음성을 인식하지 않습니다.</p><button id="setup">준비 모드로 복귀</button></div></section></div>
-<div class="lower-grid"><section class="card"><div class="section-title"><span class="step">03</span><h2>시행 메모</h2></div><form id="note-form"><label class="sr-only" for="note">시행 메모</label><textarea id="note" maxlength="2000" rows="3" placeholder="재실행 사유나 관찰 사항을 기록하세요. 이름·연락처는 입력하지 마세요."></textarea><button id="save-note">메모 저장</button></form></section><section class="card"><div class="section-title"><h2>최근 기록</h2><span class="tag">서버 저장</span></div><ol id="events" class="events"><li>아직 기록이 없습니다.</li></ol></section></div>
-<footer>Coast Research · 화면 조작과 터치를 기록합니다. 외부 녹음·발화 시각은 측정하지 않습니다.</footer></main></body></html>
+<div class="control-footer"><p>자동 재생 중에는 Cue 수동 조작이 잠깁니다.<br>시행 종료·중단 시 PC 재생도 멈춥니다.</p><button id="setup">준비 모드로 복귀</button></div></section></div>
+<section class="card audio-card" aria-labelledby="audio-heading">
+<div class="section-title"><span class="step">03</span><h2 id="audio-heading">PC 음원 재생</h2><span class="tag">iPad 무음</span></div>
+<p class="audio-intro">초반 대화가 끝나면 조건별로 자동 진행합니다. Reactive·Suggestion은 참가자 발화를 확인한 뒤 <kbd>Space</kbd>를 누르세요.</p>
+<fieldset id="audio-files" class="audio-files">
+<div><label for="dialogue-file">초반 동승자 대화</label><input id="dialogue-file" type="file" accept="audio/*,.mp3,.wav,.m4a"><small id="dialogue-info">선택된 파일 없음</small></div>
+<div id="prompt-file-row" hidden><label for="prompt-file">AI 제안 질문 <small>Suggestion 전용</small></label><input id="prompt-file" type="file" accept="audio/*,.mp3,.wav,.m4a"><small id="prompt-info">선택된 파일 없음</small></div>
+<div><label for="answer-file">AI 최종 답변</label><input id="answer-file" type="file" accept="audio/*,.mp3,.wav,.m4a"><small id="answer-info">선택된 파일 없음</small></div>
+<div class="delay-field"><label for="audio-delay">응답 대기 <small>ms</small></label><input id="audio-delay" type="number" min="0" max="10000" step="100" value="1000"><small>응답 확인·Cue 터치 수신·Direct 대화 종료 후 대기. 기본 1초이며 통신 지연은 별도입니다.</small></div>
+</fieldset>
+<p class="hint">파일은 이 PC에서만 사용하며 서버로 업로드하지 않습니다. 새로고침하거나 조건을 바꾸면 다시 선택하세요. 참가자의 호출·승인 발화는 대화 음원에 넣지 마세요.</p>
+<div class="audio-test-row"><button id="audio-test" type="button">TV 소리 테스트</button><span id="audio-test-result">PC 출력 장치를 TV로 선택하고 소리를 확인하세요.</span></div>
+<div id="audio-status" class="audio-status" role="status">음원을 선택하고 시행을 시작하세요.</div>
+<div class="audio-actions"><button id="audio-begin" type="button" class="primary">동승자 대화 재생 · 자동 진행</button><button id="audio-confirm" type="button" aria-keyshortcuts="Space">참가자 응답 확인 <kbd>Space</kbd></button><button id="audio-stop" type="button" class="danger">재생 정지</button></div>
+<p class="hint">Space는 이 admin 창이 활성화되고 응답을 기다릴 때만 동작합니다. 입력창·버튼에 초점이 있으면 전용 응답 확인 버튼을 사용하세요. 음성 인식·녹음은 하지 않습니다.</p>
+<p id="audio-pending" class="hint" role="status">PC 재생 로그 저장 대기 0건</p>
+</section><div class="lower-grid"><section class="card"><div class="section-title"><span class="step">04</span><h2>시행 메모</h2></div><form id="note-form"><label class="sr-only" for="note">시행 메모</label><textarea id="note" maxlength="2000" rows="3" placeholder="재실행 사유나 관찰 사항을 기록하세요. 이름·연락처는 입력하지 마세요."></textarea><button id="save-note">메모 저장</button></form></section><section class="card"><div class="section-title"><h2>최근 기록</h2><span class="tag">서버 저장</span></div><ol id="events" class="events"><li>아직 기록이 없습니다.</li></ol></section></div>
+<footer>Coast Research · 화면 조작·터치·진행자 응답 확인·PC 음원 재생을 기록합니다. 참가자 발화 시점과 TV의 실제 소리 발생 시점은 측정하지 않습니다.</footer></main></body></html>
