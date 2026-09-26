@@ -1,4 +1,4 @@
-export const VERSION = '2.1.0';
+export const VERSION = '2.1.1';
 export const RELATIONSHIPS = ['friend','partner','coworker'];
 export const INTERVENTIONS = ['reactive','cue','suggestion','direct'];
 export class Problem extends Error { constructor(message,status=400){super(message);this.status=status;} }
@@ -10,7 +10,13 @@ export function transition(previous,action,data,context){
   const event={type:action,payload:{}};
   const advance=()=>{s.generation++;};
   const hidden=()=>{s.icon='hidden';};
-  if(action==='prepare'){
+  if(action==='reset_records'){
+    requireThat(!active,'시행을 먼저 종료하거나 중단한 뒤 기록을 초기화해 주세요.',409);
+    requireThat(data.confirmation==='초기화','확인란에 초기화를 입력해 주세요.');
+    requireThat(data.expectedTrialCount===s.trialCount,'시행 수가 변경되었습니다. 초기화 창을 다시 열어 주세요.',409);
+    const count=s.trialCount;
+    Object.assign(s,initialState(),{generation:previous.generation+1,audioRun:null,resetGeneration:previous.generation+1,lastReset:{id:data.id,at:now,clearedTrials:count}});
+  }else if(action==='prepare'){
     requireThat(!active,'먼저 현재 시행을 종료하거나 중단해 주세요.',409);
     requireThat(typeof data.participant==='string' && /^[A-Za-z0-9_-]{1,40}$/.test(data.participant),'참가자 ID는 영문·숫자·밑줄·하이픈 1–40자로 입력해 주세요.');
     requireThat(RELATIONSHIPS.includes(data.relationship)&&INTERVENTIONS.includes(data.intervention),'조건을 선택해 주세요.');

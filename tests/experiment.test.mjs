@@ -25,6 +25,60 @@ async function fixture(){
   }
   return {DB,admin,device,get pageId(){return pageId;},setPageId(value){pageId=value;},path,call,command,event,apply,start,refresh,get state(){return state;},close:()=>DB.close()};
 }
+
+test('record reset clears four practice trials, preserves pairing and cannot revive stale device/audio logs',async()=>{
+  const f=await fixture();try{
+    for(let i=0;i<3;i++){await f.start();await f.command('end');}
+    await f.command('prepare',{participant:'P001',scenario:'restaurant',relationship:'friend',intervention:'cue'});
+    const confirmed={confirmation:'초기화',expectedTrialCount:4};
+    assert.equal((await f.command('reset_records',confirmed)).status,409);
+    await f.apply();await f.command('start');
+    assert.equal((await f.command('reset_records',confirmed)).status,409);
+    const runId=uid(),audioPage=uid(),asset={name:'practice.wav',duration:1,sha256:'a'.repeat(64)};
+    await f.command('begin_audio',{pageId:audioPage,delayMs:1000,assets:{dialogue:asset,answer:asset}},runId);
+    await f.command('show_cue');
+    const old={trialId:f.state.trial.id,generation:f.state.generation,cueId:f.state.cueId},displayId=uid();
+    await f.event('cue_displayed',{...old,id:displayId,monotonicMs:100});
+    await f.command('note',{note:'연습용 메모'});await f.command('end');
+    const generation=f.state.generation;
+    assert.equal((await f.command('reset_records',{...confirmed,confirmation:''})).status,400);
+    assert.equal((await f.command('reset_records',{...confirmed,expectedTrialCount:3})).status,409);
+    const resetId=uid(),payload={id:resetId,action:'reset_records',baseGeneration:generation,...confirmed};
+    assert.equal((await f.call(f.path('command'),{auth:f.device,role:'device',data:payload})).status,403);
+    assert.equal((await f.call(f.path('command'),{auth:f.admin,user:'other',data:payload})).status,403);
+    await f.DB.prepare('UPDATE sessions SET device_seen=0 WHERE id=?').bind(f.admin.id).run();
+    const resets=await Promise.all([f.call(f.path('command'),{auth:f.admin,data:payload}),f.call(f.path('command'),{auth:f.admin,data:payload})]);
+    assert.deepEqual(resets.map(r=>r.status),[200,200]);await f.refresh();
+    assert.equal(f.state.generation,generation+1);assert.equal(f.state.trialCount,0);assert.equal(f.state.trial,null);assert.equal(f.state.mode,'setup');assert.equal(f.state.icon,'hidden');assert.equal(f.state.audioRun,null);
+    let exported=await f.call(f.path('export?format=json'),{auth:f.admin});assert.deepEqual(exported.result.trials,[]);assert.deepEqual(exported.result.events,[]);
+    const oldTouch=await f.event('touch',{...old,displayEventId:displayId,reactionMs:200});assert.equal(oldTouch.status,200);assert.equal(oldTouch.result.discarded,true);
+    assert.equal((await f.event('applied',{generation:old.generation,trialId:null})).result.discarded,true);
+    const staleAudio=await f.call(f.path('audio-event'),{auth:f.admin,data:{id:uid(),runId,trialId:old.trialId,pageId:audioPage,type:'audio_ended',clientTime:new Date().toISOString(),monotonicMs:500,generation:old.generation}});
+    assert.equal(staleAudio.status,200);assert.equal(staleAudio.result.discarded,true);
+    const lateStop=await f.call(f.path('audio-event'),{auth:f.admin,data:{id:uid(),runId,trialId:old.trialId,pageId:audioPage,type:'audio_flow_stopped',clientTime:new Date().toISOString(),monotonicMs:600,generation:f.state.generation}});
+    assert.equal(lateStop.status,200);assert.equal(lateStop.result.discarded,true);
+    exported=await f.call(f.path('export?format=json'),{auth:f.admin});assert.equal(exported.result.events.length,0);
+    assert.equal((await f.call(f.path('state')+'?pageId='+f.pageId,{auth:f.device,role:'device'})).status,200);
+    await f.start('friend','reactive');assert.equal(f.state.trial.number,1);
+    const newTrial=f.state.trial.id;
+    assert.equal((await f.call(f.path('command'),{auth:f.admin,data:payload})).status,200);
+    await f.refresh();assert.equal(f.state.trial.id,newTrial);assert.equal(f.state.trialCount,1);
+    assert.equal((await f.call(f.path('command'),{auth:f.admin,data:{...payload,id:uid()}})).status,409);
+  }finally{f.close();}
+});
+
+test('a simultaneous new trial and reset cannot erase a newly prepared trial',async()=>{
+  const f=await fixture();try{
+    await f.start();await f.command('end');const baseGeneration=f.state.generation;
+    const results=await Promise.all([
+      f.call(f.path('command'),{auth:f.admin,data:{id:uid(),action:'reset_records',baseGeneration,confirmation:'초기화',expectedTrialCount:1}}),
+      f.call(f.path('command'),{auth:f.admin,data:{id:uid(),action:'prepare',baseGeneration,participant:'P002',scenario:'new',relationship:'friend',intervention:'reactive'}})
+    ]);
+    assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);await f.refresh();
+    const exported=await f.call(f.path('export?format=json'),{auth:f.admin});
+    if(f.state.trial){assert.equal(f.state.trial.participant,'P002');assert.equal(exported.result.trials.length,2);}else assert.equal(exported.result.trials.length,0);
+  }finally{f.close();}
+});
 test('12 conditions preserve their metadata and only Cue can display an icon',async()=>{
   const f=await fixture();try{
     for(const relationship of RELATIONSHIPS)for(const intervention of INTERVENTIONS){
