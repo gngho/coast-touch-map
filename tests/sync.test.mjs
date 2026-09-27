@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {request} from '../public/sync.js';
-import {createNotice} from '../public/admin/notice.js';
+import {createNotice,versionNotice} from '../public/admin/notice.js';
 
 function noticeFixture(){
   const classes=new Set(),element={textContent:'',classList:{toggle(name,on){on?classes.add(name):classes.delete(name);}}};
@@ -45,4 +45,15 @@ test('connection recovery preserves validation/authentication errors and newer n
   assert.equal(element.textContent,'새 연결 코드를 입력하세요.');assert.equal(classes.has('error'),false);
   messages.error(Object.assign(new Error('연결 오류'),{code:'CONNECTION_ERROR'}));messages.connectionRestored();
   const restored=element.textContent;messages.connectionRestored();assert.equal(element.textContent,restored);
+});
+test('temporary server failures clear after recovery, including an HTML gateway response; writes never auto retry',async t=>{
+  const f=noticeFixture();let calls=0;
+  t.mock.method(globalThis,'fetch',async()=>{calls++;return new Response('Gateway unavailable',{status:503});});
+  const error=await request('/api/command',{method:'POST',data:{id:'same-event'}}).catch(e=>e);
+  assert.equal(calls,1);assert.equal(error.status,503);assert.equal(error.code,'SERVER_UNAVAILABLE');
+  f.messages.error(error);assert.ok(f.classes.has('error'));f.messages.connectionRestored();assert.equal(f.classes.has('error'),false);
+  globalThis.fetch.mock.mockImplementation(async()=>new Response(JSON.stringify({error:'저장소 연결 실패'}),{status:503}));
+  await assert.rejects(request('/api/status'),e=>e.code==='SERVER_UNAVAILABLE'&&e.message==='저장소 연결 실패');
+  assert.equal(versionNotice('2.3.2','2.3.2'),'');assert.equal(versionNotice('2.3.2',null),'');
+  assert.match(versionNotice('2.3.2','2.3.3'),/PC 2.3.2.*서버 2.3.3/);
 });

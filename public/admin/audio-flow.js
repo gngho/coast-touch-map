@@ -11,7 +11,8 @@ export class AudioFlow {
     const wasReady=this.ready;this.snapshot=snapshot;this.connected=connected;this.ready=ready;this.diagnostics=diagnostics;
     if(this.active&&(!connected||snapshot?.state.suspended||snapshot?.state.trial?.id!==this.run?.trialId||snapshot.state.trial.status!=='running')){
       const cause=!connected?'connection_timeout':snapshot?.state.suspended?'participant_suspended':'trial_changed';
-      this.cancel('연결 또는 시행 상태가 변경되어 자동 재생을 멈췄습니다. 자동으로 다시 재생하지 않습니다.',{cause,...diagnostics});return;
+      const reason={connection_timeout:'10초 이상 연결 확인이 되지 않아 자동 재생을 멈췄습니다.',participant_suspended:'iPad가 안전 대기 상태로 전환되어 자동 재생을 멈췄습니다. 화면 이탈·재접속 기록을 확인해 주세요.',trial_changed:'현재 시행이 종료·중단되거나 다른 시행으로 바뀌어 자동 재생을 멈췄습니다.'}[cause];
+      this.cancel(reason,{cause,...diagnostics});return;
     }
     if(this.active&&this.claimed&&wasReady!==undefined&&wasReady!==ready)void this.emit(ready?'audio_connection_restored':'audio_connection_delayed',diagnostics).catch(()=>{});
     if(this.phase==='cue_wait'&&snapshot?.state.touched){

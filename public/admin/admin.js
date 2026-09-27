@@ -1,11 +1,12 @@
 import {load,save,request,endpoint} from '/sync.js';
-import {createNotice} from './notice.js';
+import {createNotice,versionNotice} from './notice.js';
 import {initAudio} from './audio.js';
 import {initRecordReset} from './reset.js';
 import {initReports} from './reports.js';
 import {initSchedules} from './schedules.js';
 import {connectionHealth} from '/connection.js';
 const $=id=>document.getElementById(id);
+const UI_VERSION='2.3.2';
 const relations={friend:'친구',partner:'연인',coworker:'직장동료'},methods={reactive:'Reactive',cue:'Proactive cue',suggestion:'Proactive suggestion',direct:'Proactive direct'};
 const icons={hidden:'숨김',idle:'Cue 대기',listening:'Listening',thinking:'Thinking',speaking:'Speaking'};
 const statuses={prepared:'준비 완료',running:'진행 중',ended:'종료',aborted:'중단'};
@@ -18,6 +19,8 @@ Object.assign(eventLabels,{begin_audio:'자동 재생 시작',audio_started:'PC 
 const messages=createNotice($('notice'));
 const notice=messages.show;
 function render(){
+  const updateMessage=versionNotice(UI_VERSION,snapshot?.version);
+  $('version-notice').hidden=!updateMessage;$('version-notice').textContent=updateMessage;
   const s=snapshot?.state,t=s?.trial,health=connectionHealth(snapshot,lastSuccess,performance.now()),connected=health.ready,active=t&&['prepared','running'].includes(t.status),ready=connected&&!busy,control=ready&&!s?.suspended;
   audio?.update(snapshot,health.alive,health.ready,health);
   recordReset?.update();
