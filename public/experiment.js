@@ -33,6 +33,9 @@ export function initializeExperiment(coast){
     else if(!experiment){setup();display=null;pendingTouch=null;}
     else{
       const visible=s.trial?.status==='running'&&s.trial.intervention==='cue'&&s.icon!=='hidden';
+      // Upload ACK can precede a concurrent (older) state response. Keep the
+      // local touch latch until authoritative state consumes or clears the Cue.
+      if(!visible||s.touched)pendingTouch=null;
       ai.setVisible(visible);if(!pendingTouch)ai.setState(s.icon==='hidden'?'idle':s.icon);
       if(!visible)display=null;
       if(visible&&s.icon==='idle'&&!s.touched&&!display&&!pendingTouch){
@@ -63,7 +66,6 @@ export function initializeExperiment(coast){
         if(auth!==target||needsRejoin||document.hidden||superseded)break;
         await request(endpoint(target,'event'),{auth:target,role:'device',method:'POST',data:event});
         await outbox.remove(event.id);pending=Math.max(0,pending-1);
-        if(pendingTouch===event.id)pendingTouch=null;
       }
     }catch(error){lastError=error.code||'HTTP_ERROR';status('로그 저장 대기 · '+error.message);}
   });
