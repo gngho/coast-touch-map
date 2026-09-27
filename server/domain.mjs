@@ -1,5 +1,5 @@
 import {validateConfig} from '../public/admin/schedule-model.js';
-export const VERSION = '2.3.0';
+export const VERSION = '2.3.1';
 export const RELATIONSHIPS = ['friend','partner','coworker'];
 export const INTERVENTIONS = ['reactive','cue','suggestion','direct'];
 export class Problem extends Error { constructor(message,status=400){super(message);this.status=status;} }
@@ -55,7 +55,7 @@ export function transition(previous,action,data,context){
     event.type='cue_touch';event.payload={cueId:data.cueId,accepted,reactionMs:data.reactionMs,displayEventId:data.displayEventId};
     if(accepted){s.touched=true;s.icon='listening';advance();}
   }else if(action==='suspend'){
-    s.suspended=true;hidden();advance();event.payload={reason:data.reason};
+    s.suspended=true;hidden();advance();event.payload={reason:data.reason,...(data.diagnostics?{diagnostics:data.diagnostics}:{})};
   }else if(action==='resume'){
     requireThat(s.suspended,'재개할 연결 중단이 없습니다.',409);
     s.suspended=false;hidden();advance();event.payload={cueWillRemainHidden:true};

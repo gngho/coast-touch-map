@@ -179,6 +179,20 @@ test('connection timeout blocks normal controls, permits abort, preserves record
     const data=await f.call(f.path('export?format=json'),{auth:f.admin});assert.equal(data.result.trials[0].status,'aborted');
   }finally{f.close();}
 });
+test('heartbeat distinguishes warning from lost peer and preserves sanitized rejoin diagnostics',async()=>{
+  const f=await fixture();try{
+    await f.start();
+    await f.DB.prepare('UPDATE sessions SET admin_seen=? WHERE id=?').bind(Date.now()-4000,f.admin.id).run();
+    const read=()=>f.call(f.path('state?pageId='+f.pageId),{auth:f.device,role:'device'});
+    let r=await read();assert.equal(r.result.adminConnected,false);assert.equal(r.result.adminAlive,true);assert.ok(r.result.adminAgeMs>=4000);
+    await f.DB.prepare('UPDATE sessions SET admin_seen=? WHERE id=?').bind(Date.now()-11000,f.admin.id).run();
+    r=await read();assert.equal(r.result.adminAlive,false);
+    const rejoin=await f.call(f.path('rejoin'),{auth:f.device,role:'device',data:{id:uid(),pageId:f.pageId,reason:'connection_gap',diagnostics:{cause:'local_timeout',localAgeMs:10100,lastError:'REQUEST_TIMEOUT',secret:'omit'}}});
+    assert.equal(rejoin.status,200);assert.equal(rejoin.result.state.suspended,true);
+    const data=(await f.call(f.path('export?format=json'),{auth:f.admin})).result;
+    assert.deepEqual(data.events.find(e=>e.type==='suspend').payload.diagnostics,{cause:'local_timeout',localAgeMs:10100,lastError:'REQUEST_TIMEOUT'});
+  }finally{f.close();}
+});
 test('concurrent retries produce one command event and CSV preserves Unicode notes safely',async()=>{
   const f=await fixture();try{
     await f.start();const id=uid(),data={id,action:'show_cue',baseGeneration:f.state.generation};

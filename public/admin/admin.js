@@ -4,12 +4,13 @@ import {initAudio} from './audio.js';
 import {initRecordReset} from './reset.js';
 import {initReports} from './reports.js';
 import {initSchedules} from './schedules.js';
+import {connectionHealth} from '/connection.js';
 const $=id=>document.getElementById(id);
 const relations={friend:'친구',partner:'연인',coworker:'직장동료'},methods={reactive:'Reactive',cue:'Proactive cue',suggestion:'Proactive suggestion',direct:'Proactive direct'};
 const icons={hidden:'숨김',idle:'Cue 대기',listening:'Listening',thinking:'Thinking',speaking:'Speaking'};
 const statuses={prepared:'준비 완료',running:'진행 중',ended:'종료',aborted:'중단'};
-const eventLabels={schedule_created:'라틴스퀘어 배정표 저장',prepare:'시행 준비',start:'시행 시작',end:'시행 종료',abort:'시행 중단',setup:'준비 모드 복귀',show_cue:'Cue 표시 요청',set_icon:'아이콘 상태 변경',applied:'iPad 화면 적용',cue_displayed:'iPad Cue 표시',cue_touch:'Cue 터치',suspend:'안전 대기',resume:'연결 재개',note:'메모',connection_lost:'연결 끊김',visibility_hidden:'iPad 화면 비활성'};
-let auth=load('coast.admin.v2'),snapshot=null,busy=false,lastSuccess=0,codeExpiry=0,pollBusy=false;
+const eventLabels={audio_connection_delayed:'재생 중 연결 응답 지연',audio_connection_restored:'재생 중 연결 응답 복구',schedule_created:'라틴스퀘어 배정표 저장',prepare:'시행 준비',start:'시행 시작',end:'시행 종료',abort:'시행 중단',setup:'준비 모드 복귀',show_cue:'Cue 표시 요청',set_icon:'아이콘 상태 변경',applied:'iPad 화면 적용',cue_displayed:'iPad Cue 표시',cue_touch:'Cue 터치',suspend:'안전 대기',resume:'연결 재개',note:'메모',connection_lost:'연결 끊김',visibility_hidden:'iPad 화면 비활성'};
+let auth=load('coast.admin.v2'),snapshot=null,busy=false,lastSuccess=null,codeExpiry=0,pollBusy=false;
 let audio=null;
 let recordReset=null;
 let schedulesUi=null;
@@ -17,12 +18,12 @@ Object.assign(eventLabels,{begin_audio:'자동 재생 시작',audio_started:'PC 
 const messages=createNotice($('notice'));
 const notice=messages.show;
 function render(){
-  const s=snapshot?.state,t=s?.trial,connected=snapshot?.deviceConnected&&performance.now()-lastSuccess<3000,active=t&&['prepared','running'].includes(t.status),ready=connected&&!busy,control=ready&&!s?.suspended;
-  audio?.update(snapshot,connected);
+  const s=snapshot?.state,t=s?.trial,health=connectionHealth(snapshot,lastSuccess,performance.now()),connected=health.ready,active=t&&['prepared','running'].includes(t.status),ready=connected&&!busy,control=ready&&!s?.suspended;
+  audio?.update(snapshot,health.alive,health.ready,health);
   recordReset?.update();
   schedulesUi?.update();
-  $('connection-status').textContent=connected?(s.suspended?'iPad 연결됨 · 재개 대기':'iPad 연결됨'):'iPad 연결 확인 필요';
-  $('connection-detail').textContent=s?.suspended?'재개해도 이전 Cue는 다시 나타나지 않습니다.':connected?'진행자 명령과 참가자 화면의 적용 여부를 구분해 표시합니다.':'iPad에서 Coast를 열어 두세요. 연결이 확인될 때까지 조작이 잠깁니다.';
+  $('connection-status').textContent=!connected&&health.alive?'연결 응답 지연 · 새 조작 대기':connected?(s.suspended?'iPad 연결됨 · 재개 대기':'iPad 연결됨'):'iPad 연결 확인 필요';
+  $('connection-detail').textContent=!connected&&health.alive?'현재 음원은 유지하고 다음 음원·화면 변경은 기다립니다. 지연이 10초 지속되면 자동 재생을 중단합니다.':s?.suspended?'재개해도 이전 Cue는 다시 나타나지 않습니다.':connected?'진행자 명령과 참가자 화면의 적용 여부를 구분해 표시합니다.':'iPad에서 Coast를 열어 두세요. 연결이 확인될 때까지 조작이 잠깁니다.';
   $('create-code').disabled=!auth||busy; $('pair-code-area').hidden=!!snapshot?.paired;
   $('recover').hidden=!!auth;$('unpair').hidden=!snapshot?.paired;$('unpair').disabled=!!active||busy;
   $('resume').hidden=!s?.suspended;$('resume').disabled=!ready;
@@ -52,7 +53,7 @@ async function command(action,extra={},strict=false){
   if(strict&&busy){const until=performance.now()+3000;while(busy&&performance.now()<until)await new Promise(resolve=>setTimeout(resolve,25));}
   if(busy||!auth||!snapshot){if(strict)throw Error('다른 조작을 처리 중입니다. 상태를 확인해 주세요.');return;}busy=true;render();
   const data={id:crypto.randomUUID(),action,baseGeneration:snapshot.state.generation,...extra};
-  try{snapshot=await request(endpoint(auth,'command'),{auth,method:'POST',data});notice('명령을 저장했습니다. iPad의 적용 확인을 기다립니다.');return snapshot;}
+  try{const result=await request(endpoint(auth,'command'),{auth,method:'POST',data});if(!snapshot||result.state.generation>=snapshot.state.generation)snapshot=result;notice('명령을 저장했습니다. iPad의 적용 확인을 기다립니다.');return snapshot;}
   catch(error){messages.error(error);if(strict)throw error;}
   finally{busy=false;render();}
 }
@@ -72,13 +73,13 @@ async function boot(){
 }
 async function poll(){
   if(pollBusy)return;pollBusy=true;
-  try{if(!auth||busy)return;const next=await request(endpoint(auth,'state'),{auth});if(!snapshot||next.state.generation>=snapshot.state.generation)snapshot=next;lastSuccess=performance.now();messages.connectionRestored();}
+  try{if(!auth)return;const next=await request(endpoint(auth,'state'),{auth});if(!snapshot||next.state.generation>=snapshot.state.generation)snapshot=next;lastSuccess=performance.now();messages.connectionRestored();}
   catch(error){messages.error(error);if(error.status===403){auth=null;localStorage.removeItem('coast.admin.v2');}}
   finally{pollBusy=false;render();setTimeout(poll,250);}
 }
 setInterval(()=>{render();if(codeExpiry)$('code-expiry').textContent=Date.now()<codeExpiry?`유효 시간 ${Math.ceil((codeExpiry-Date.now())/1000)}초`:'코드가 만료되었습니다. 다시 생성하세요.';},1000);
 audio=initAudio({getAuth:()=>auth,getSnapshot:()=>snapshot,command,refresh:render});
 const reports=initReports({getAuth:()=>auth});
-schedulesUi=initSchedules({getAuth:()=>auth,getSnapshot:()=>snapshot,command,isBusy:()=>busy,isConnected:()=>snapshot?.deviceConnected&&performance.now()-lastSuccess<3000});
+schedulesUi=initSchedules({getAuth:()=>auth,getSnapshot:()=>snapshot,command,isBusy:()=>busy,isConnected:()=>connectionHealth(snapshot,lastSuccess,performance.now()).ready});
 recordReset=initRecordReset({getSnapshot:()=>snapshot,command,onSuccess:()=>{reports.clear();schedulesUi.clear();$('participant').value='';$('note').value='';notice('기록과 배정표를 초기화했습니다. 다음 시행은 01부터 시작하며 iPad 연결은 유지됩니다.');}});
 boot();

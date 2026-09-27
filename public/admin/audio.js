@@ -43,11 +43,11 @@ export function initAudio({getAuth,getSnapshot,command,refresh}){
     const suggestion=(t&&['prepared','running'].includes(t.status)?t.intervention:$('intervention').value)==='suggestion';
     $('prompt-file-row').hidden=!suggestion;
     const ready=assets.dialogue&&assets.answer&&(!suggestion||assets.prompt);
-    $('audio-begin').disabled=!ready||locked||!!s?.audioRun||!flow.connected||s?.suspended||t?.status!=='running'||!!s?.cueId;
+    $('audio-begin').disabled=!ready||locked||!!s?.audioRun||!flow.ready||s?.suspended||t?.status!=='running'||!!s?.cueId;
     $('audio-confirm').disabled=!flow.canConfirm;
     $('audio-stop').disabled=!flow.active;
     $('audio-test').disabled=locked;
-    $('audio-status').textContent=s?.audioRun&&s.audioRun.pageId!==pageId?'이 시행은 다른 화면 또는 이전 접속에서 자동 재생을 시작했습니다. 중복 재생하지 않습니다. 새 시행을 준비해 주세요.':flow.run?.trialId===t?.id?flow.message:'음원을 선택하고 시행 시작 후 대화를 재생하세요.';
+    $('audio-status').textContent=s?.audioRun&&s.audioRun.pageId!==pageId?'이 시행은 다른 화면 또는 이전 접속에서 자동 재생을 시작했습니다. 중복 재생하지 않습니다. 새 시행을 준비해 주세요.':flow.run?.trialId===t?.id?(flow.active&&!flow.ready?'연결 응답 지연 · 현재 음원 유지 / 다음 동작 대기':flow.message):'음원을 선택하고 시행 시작 후 대화를 재생하세요.';
     $('audio-status').classList.toggle('error',['error','stopped'].includes(flow.phase));
     $('audio-pending').textContent=`PC 재생 로그 저장 대기 ${pending}건${queueError?' · '+queueError:''}`;
   }
@@ -95,5 +95,5 @@ export function initAudio({getAuth,getSnapshot,command,refresh}){
   }
   for(const id of ['relationship','intervention','scenario'])$(id).addEventListener('change',changedCondition);
   changedCondition();void flush();setInterval(flush,1000);
-  return {update(snapshot,connected){flow.update(snapshot,connected);render();},get active(){return flow.active;},cancel:reason=>flow.cancel(reason)};
+  return {update(snapshot,connected,ready=connected,diagnostics={}){flow.update(snapshot,connected,ready,diagnostics);render();},get active(){return flow.active;},cancel:reason=>flow.cancel(reason)};
 }

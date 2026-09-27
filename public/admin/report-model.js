@@ -1,7 +1,7 @@
 // Derived views only: never alter observations or combine clocks across pages/devices.
 export const relationships={friend:'친구',partner:'연인',coworker:'직장동료'};
 export const interventions={reactive:'Reactive',cue:'Proactive cue',suggestion:'Proactive suggestion',direct:'Proactive direct'};
-const labels={schedule_created:'배정표 저장',prepare:'시행 준비',start:'시행 시작',end:'시행 종료',abort:'시행 중단',setup:'준비 모드 복귀',unpair:'iPad 연결 해제',show_cue:'Cue 표시 요청',set_icon:'아이콘 변경 요청',applied:'iPad 화면 적용 확인',cue_displayed:'iPad Cue 표시 기록',cue_touch:'Cue 첫 터치 기록',suspend:'안전 대기',resume:'연결 재개',note:'진행자 메모',connection_lost:'연결 끊김 감지',visibility_hidden:'iPad 화면 비활성',begin_audio:'자동 재생 시작 요청',audio_started:'PC 음원 재생 시작',audio_ended:'PC 음원 재생 종료',operator_confirm:'진행자 응답 확인',audio_flow_complete:'자동 재생 완료',audio_flow_stopped:'자동 재생 정지',audio_flow_error:'자동 재생 오류'};
+const labels={audio_connection_delayed:'재생 중 연결 응답 지연',audio_connection_restored:'재생 중 연결 응답 복구',schedule_created:'배정표 저장',prepare:'시행 준비',start:'시행 시작',end:'시행 종료',abort:'시행 중단',setup:'준비 모드 복귀',unpair:'iPad 연결 해제',show_cue:'Cue 표시 요청',set_icon:'아이콘 변경 요청',applied:'iPad 화면 적용 확인',cue_displayed:'iPad Cue 표시 기록',cue_touch:'Cue 첫 터치 기록',suspend:'안전 대기',resume:'연결 재개',note:'진행자 메모',connection_lost:'연결 끊김 감지',visibility_hidden:'iPad 화면 비활성',begin_audio:'자동 재생 시작 요청',audio_started:'PC 음원 재생 시작',audio_ended:'PC 음원 재생 종료',operator_confirm:'진행자 응답 확인',audio_flow_complete:'자동 재생 완료',audio_flow_stopped:'자동 재생 정지',audio_flow_error:'자동 재생 오류'};
 const clips={dialogue:'동승자 대화',prompt:'AI 제안 질문',answer:'AI 최종 답변'};
 const reasons={admin_recovery:'진행자 세션 복구',connection_gap:'연결 응답 지연',reload:'iPad 페이지 재진입',visibility:'iPad 화면 전환'};
 const icons={idle:'Cue 대기',listening:'Listening',thinking:'Thinking',speaking:'Speaking',hidden:'숨김'};
@@ -40,7 +40,8 @@ export function describe(event){
   if(p.clip)return `${clips[p.clip]||p.clip}${p.asset?.name?' · '+p.asset.name:''}`;
   if(p.icon)return icons[p.icon]||p.icon;
   if(p.note)return p.note;
-  if(p.reason)return reasons[p.reason]||p.reason;
+  if(p.reason)return (reasons[p.reason]||p.reason)+(p.cause?' · '+({connection_timeout:'10초 연결 확인 실패',participant_suspended:'참가자 화면 안전 대기',trial_changed:'시행 변경'}[p.cause]||p.cause):'');
+  if(event.type.startsWith('audio_connection_'))return `PC 응답 경과 ${duration(p.localAgeMs)} · iPad 응답 경과 ${duration(p.peerAgeMs)} (관측값)`;
   if(p.message)return p.message;
   if(event.type==='cue_displayed')return 'iPad 표시 적용 기록. 물리적 발광 시점은 아님';
   if(event.type==='applied')return '화면 변경 적용 확인';
@@ -56,7 +57,7 @@ export function summarize(input){
     const answer=es.find(e=>e.type==='audio_started'&&e.payload.clip==='answer'&&(!confirm||clockDelta(confirm,e)!=null));
     const touches=es.filter(e=>e.type==='cue_touch'&&e.payload.accepted===true);
     const touch=touches.find(e=>es.some(d=>d.id===e.payload.displayEventId&&d.type==='cue_displayed'&&d.page_id===e.page_id&&d.payload.cueId===e.payload.cueId)&&number(e.payload.reactionMs)!=null&&number(e.payload.reactionMs)>=0);
-    const issues=es.filter(e=>['connection_lost','suspend','visibility_hidden','audio_flow_stopped','audio_flow_error'].includes(e.type));
+    const issues=es.filter(e=>['connection_lost','suspend','visibility_hidden','audio_flow_stopped','audio_flow_error','audio_connection_delayed'].includes(e.type));
     const issueText=prefix=>issues.filter(e=>phase(e,t)===prefix).map(e=>`${labels[e.type]}${e.payload.reason?' ('+(reasons[e.payload.reason]||e.payload.reason)+')':''}`).join(' / ');
     const before=issueText('시작 전'),during=issueText('시행 중'),after=issueText('종료 후');
     const cueMs=t.intervention==='cue'&&touch?number(touch.payload.reactionMs):null;

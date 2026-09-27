@@ -44,3 +44,31 @@ test('Space ignores key repeat, IME, modifiers and editable/interactive targets'
   const key={code:'Space',target:{closest:()=>null}};assert.equal(acceptsSpace(key),true);
   for(const extra of [{repeat:true},{isComposing:true},{ctrlKey:true},{altKey:true},{metaKey:true},{shiftKey:true},{code:'Enter'},{target:{closest:()=>({})}}])assert.equal(acceptsSpace({...key,...extra}),false);
 });
+
+test('Suggestion waits before its prompt and again after confirmation; cancel during prompt wait never plays it',async()=>{
+  let release;const waits=[];
+  const f=fixture('suggestion',{wait:ms=>{waits.push(ms);return new Promise(r=>release=r);}});
+  const begin=f.begin();await tick();assert.deepEqual(f.clips,['dialogue']);assert.equal(f.flow.canConfirm,false);
+  assert.deepEqual(waits,[1000]);release();await begin;assert.deepEqual(f.clips,['dialogue','prompt']);
+  const confirm=f.flow.confirm('Space');await tick();assert.deepEqual(waits,[1000,1000]);assert.equal(f.clips.includes('answer'),false);
+  release();await confirm;assert.deepEqual(f.clips,['dialogue','prompt','answer']);
+  let cancelWait;const c=fixture('suggestion',{wait:()=>new Promise(r=>cancelWait=r)});const pending=c.begin();await tick();c.flow.cancel();cancelWait();await pending;assert.deepEqual(c.clips,['dialogue']);
+});
+
+test('transient delay keeps the current clip, gates the next prompt, and resumes once without replay',async()=>{
+  let finishClip,releaseWait;let stops=0;const clips=[];
+  const f=fixture('suggestion',{play:async(asset,started)=>{clips.push(asset.meta.name);await started();if(asset.meta.name==='dialogue')await new Promise(r=>finishClip=r);},stop:()=>stops++,wait:ms=>ms===100?new Promise(r=>releaseWait=r):Promise.resolve()});
+  const begin=f.begin();await tick();f.flow.update(f.snapshot,true,false,{localAgeMs:3500});
+  assert.equal(stops,0);assert.equal(f.flow.phase,'dialogue');finishClip();await tick();
+  assert.deepEqual(clips,['dialogue']);assert.equal(f.flow.canConfirm,false);
+  f.flow.update(f.snapshot,true,true,{localAgeMs:0});releaseWait();await begin;
+  assert.deepEqual(clips,['dialogue','prompt']);assert.equal(f.flow.canConfirm,true);
+  assert.deepEqual(f.events.filter(e=>e.type.startsWith('audio_connection')).map(e=>e.type),['audio_connection_delayed','audio_connection_restored']);
+});
+
+test('hard timeout during a soft-delay wait cancels and never resumes a queued answer',async()=>{
+  let release;const f=fixture('direct',{wait:()=>new Promise(r=>release=r)});
+  const begin=f.begin();await tick();f.flow.update(f.snapshot,true,false);f.flow.update(f.snapshot,false,false,{localAgeMs:10000});release();await begin;
+  f.flow.update(f.snapshot,true,true);assert.equal(f.flow.phase,'stopped');assert.deepEqual(f.clips,['dialogue']);
+  assert.equal(f.events.find(e=>e.type==='audio_flow_stopped').detail.cause,'connection_timeout');
+});

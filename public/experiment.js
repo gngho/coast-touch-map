@@ -1,9 +1,13 @@
 import {initializeAiWidget} from './ai.js';
 import {load,save,request,endpoint,Outbox} from './sync.js';
+import {WARN_MS,LOST_MS,singleFlight} from './connection.js';
 export function initializeExperiment(coast){
   const $=id=>document.getElementById(id), pageId=crypto.randomUUID(),outbox=new Outbox();
   let auth=load('coast.device.v2'),snapshot=null,lastSuccess=0,needsRejoin=!!auth,reason='reload',lastApplied=-1,resetTrial=null;
   let display=null,pendingTouch=null,order=Date.now(),storageOK=true,polling=false,rejoinId=crypto.randomUUID(),superseded=false;
+  let pending=0,lastError=null,gapDiagnostics=null;
+  const diagnostics=cause=>({cause,localAgeMs:lastSuccess?performance.now()-lastSuccess:0,peerAgeMs:snapshot?.adminAgeMs,pendingEvents:pending,lastError});
+  function loseConnection(cause){if(needsRejoin)return;gapDiagnostics=diagnostics(cause);needsRejoin=true;reason='connection_gap';safeHide();void enqueue('connection_lost',{diagnostics:gapDiagnostics}).catch(()=>{});}
   const ai=initializeAiWidget({onTouch:touch});
   $('ai-visible').checked=load('coast.ai-visible',false);
   function setup(){ai.setMode(false);ai.setVisible($('ai-visible').checked);$('settings-open').hidden=false;}
@@ -14,7 +18,7 @@ export function initializeExperiment(coast){
   $('ai-visible').onchange=()=>{try{save('coast.ai-visible',$('ai-visible').checked);}catch{}if(snapshot?.state.mode!=='experiment')setup();};
   async function enqueue(type,extra={}){
     const event={id:crypto.randomUUID(),type,pageId,clientTime:new Date().toISOString(),generation:snapshot?.state.generation??0,trialId:snapshot?.state.trial?.id??null,sessionId:auth.id,order:++order,...extra};
-    try{await outbox.put(event);return event;}catch{storageOK=false;safeHide();needsRejoin=true;reason='connection_gap';status('기기 로그 저장 공간을 사용할 수 없습니다. 진행자에게 알려 주세요.');throw Error('로그 임시 저장 실패');}
+    try{await outbox.put(event);pending++;return event;}catch{storageOK=false;safeHide();needsRejoin=true;reason='connection_gap';status('기기 로그 저장 공간을 사용할 수 없습니다. 진행자에게 알려 주세요.');throw Error('로그 임시 저장 실패');}
   }
   async function touch(){
     if(!display||pendingTouch||!storageOK||needsRejoin||!snapshot||snapshot.state.touched||snapshot.state.icon!=='idle')return;
@@ -22,6 +26,7 @@ export function initializeExperiment(coast){
     try{const event=await enqueue('touch',{cueId:shown.cueId,displayEventId:shown.id,generation:shown.generation,reactionMs:performance.now()-shown.monotonicMs});pendingTouch=event.id;}catch{pendingTouch=null;}
   }
   async function apply(next){
+    if(snapshot&&next.state.generation<snapshot.state.generation)return;
     snapshot=next;const s=next.state,experiment=s.mode==='experiment';mode(experiment);
     if(s.trial?.id!==resetTrial&&s.trial?.status==='prepared'){coast.reset();resetTrial=s.trial.id;}
     if(s.suspended||needsRejoin||!storageOK){safeHide();}
@@ -49,34 +54,41 @@ export function initializeExperiment(coast){
       auth={id:result.id,token:result.deviceToken};save('coast.device.v2',auth);needsRejoin=false;lastSuccess=performance.now();await apply(result);
     }catch(error){status(error.message);}finally{button.disabled=false;}
   };
+  const flush=singleFlight(async()=>{
+    if(!auth||document.hidden||superseded||needsRejoin)return;
+    const target=auth;
+    try{
+      const queue=(await outbox.all()).filter(e=>e.sessionId===target.id);pending=queue.length;
+      for(const event of queue.slice(0,20)){
+        if(auth!==target||needsRejoin||document.hidden||superseded)break;
+        await request(endpoint(target,'event'),{auth:target,role:'device',method:'POST',data:event});
+        await outbox.remove(event.id);pending=Math.max(0,pending-1);
+        if(pendingTouch===event.id)pendingTouch=null;
+      }
+    }catch(error){lastError=error.code||'HTTP_ERROR';status('로그 저장 대기 · '+error.message);}
+  });
   async function tick(){
     if(polling)return;polling=true;
     try{
       if(!auth||document.hidden||superseded)return;
       if(needsRejoin){
-        safeHide();const result=await request(endpoint(auth,'rejoin'),{auth,role:'device',method:'POST',data:{id:rejoinId,pageId,reason,clientTime:new Date().toISOString()}});
-        needsRejoin=false;rejoinId=crypto.randomUUID();lastApplied=-1;pendingTouch=null;await apply(result);
+        safeHide();const result=await request(endpoint(auth,'rejoin'),{auth,role:'device',method:'POST',data:{id:rejoinId,pageId,reason,diagnostics:gapDiagnostics,clientTime:new Date().toISOString()}});
+        needsRejoin=false;rejoinId=crypto.randomUUID();lastApplied=-1;pendingTouch=null;lastSuccess=performance.now();await apply(result);
       }
-      const queue=await outbox.all();
-      for(const event of queue.slice(0,20)){
-        if(event.sessionId!==auth.id)continue;
-        await request(endpoint(auth,'event'),{auth,role:'device',method:'POST',data:event});await outbox.remove(event.id);
-        if(pendingTouch===event.id)pendingTouch=null;
-      }
-      const pending=(await outbox.all()).filter(e=>e.sessionId===auth.id).length;
       const result=await request(endpoint(auth,`state?pageId=${pageId}&pending=${pending}`),{auth,role:'device'});
       lastSuccess=performance.now();
-      if(result.state.mode==='experiment'&&!result.state.suspended&&!result.adminConnected){needsRejoin=true;reason='connection_gap';safeHide();return;}
+      if(result.state.mode==='experiment'&&!result.state.suspended&&!(result.adminAlive??result.adminConnected)){snapshot=result;loseConnection('admin_timeout');return;}
       await apply(result);
-    }catch(error){status(error.message);if(error.status===409&&error.message.includes('다른 화면')){superseded=true;safeHide();}if(error.status===403){safeHide();auth=null;snapshot=null;needsRejoin=false;localStorage.removeItem('coast.device.v2');mode(false);setup();$('pair-form').hidden=false;status('연결이 해제되었습니다. 새 연결 코드를 입력하세요.');}}
-    finally{polling=false;setTimeout(tick,250);}
+      if(!result.adminConnected)status('진행자 연결 응답 지연 · 복구 확인 중');
+    }catch(error){lastError=error.code||'HTTP_ERROR';status(error.message);if(error.status===409&&error.message.includes('다른 화면')){superseded=true;safeHide();}if(error.status===403){safeHide();auth=null;snapshot=null;needsRejoin=false;localStorage.removeItem('coast.device.v2');mode(false);setup();$('pair-form').hidden=false;status('연결이 해제되었습니다. 새 연결 코드를 입력하세요.');}}
+    finally{polling=false;void flush();setTimeout(tick,250);}
   }
   setInterval(()=>{
-    if(auth&&!superseded&&!needsRejoin&&lastSuccess&&performance.now()-lastSuccess>3000){needsRejoin=true;reason='connection_gap';safeHide();enqueue('connection_lost').catch(()=>{});}
+    if(auth&&!superseded&&!needsRejoin&&lastSuccess){const age=performance.now()-lastSuccess;if(age>=LOST_MS)loseConnection('local_timeout');else if(age>=WARN_MS)status('연결 응답 지연 · 복구 확인 중');}
   },250);
   document.addEventListener('visibilitychange',()=>{
     if(!auth)return;
-    if(document.hidden){safeHide();needsRejoin=true;reason='visibility';enqueue('visibility_hidden').catch(()=>{});}
+    if(document.hidden){safeHide();needsRejoin=true;reason='visibility';gapDiagnostics=diagnostics('visibility');enqueue('visibility_hidden',{diagnostics:gapDiagnostics}).catch(()=>{});}
   });
   outbox.db.catch(()=>{storageOK=false;safeHide();status('이 브라우저에서 실험 로그를 저장할 수 없습니다.');});
   tick();

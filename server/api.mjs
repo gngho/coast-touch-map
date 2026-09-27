@@ -1,5 +1,6 @@
 import {VERSION,Problem,requireThat,initialState,transition} from './domain.mjs';
 import {planProgress} from '../public/admin/schedule-model.js';
+import {WARN_MS,LOST_MS} from '../public/connection.js';
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
 const hash=async text=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))),b=>b.toString(16).padStart(2,'0')).join('');
 const token=()=>crypto.randomUUID()+crypto.randomUUID();
@@ -25,7 +26,8 @@ async function scheduledPreparation(db,row,data){
   requireThat(data.relationship===step.relationship&&data.intervention===step.intervention&&data.scenario===step.scenario,'선택한 조건이 배정표와 다릅니다.',409);
   return {...data,schedule:{planId:plan.id,design:plan.config.design,seed:plan.config.seed,allocationIndex:person.allocationIndex,block:person.block,row:person.row,caseVariant:person.caseVariant,position:step.position,condition:step.condition,poi:step.poi}};
 }
-function view(row){const s=rowState(row);return {id:row.id,state:s,version:VERSION,serverTime:now(),paired:!!row.device_hash,deviceConnected:!!row.device_hash&&now()-row.device_seen<3000,adminConnected:now()-row.admin_seen<3000,applied:row.applied_generation===s.generation&&(row.applied_trial||null)===(s.trial?.id||null),appliedGeneration:row.applied_generation,pendingEvents:row.pending_events};}
+function view(row){const s=rowState(row),stamp=now(),deviceAgeMs=Math.max(0,stamp-row.device_seen),adminAgeMs=Math.max(0,stamp-row.admin_seen);return {id:row.id,state:s,version:VERSION,serverTime:stamp,paired:!!row.device_hash,deviceAgeMs,adminAgeMs,deviceConnected:!!row.device_hash&&deviceAgeMs<WARN_MS,adminConnected:adminAgeMs<WARN_MS,adminAlive:adminAgeMs<LOST_MS,applied:row.applied_generation===s.generation&&(row.applied_trial||null)===(s.trial?.id||null),appliedGeneration:row.applied_generation,pendingEvents:row.pending_events};}
+function diagnostics(value){const v=value||{},out={};for(const key of ['localAgeMs','peerAgeMs','pendingEvents'])if(Number.isFinite(v[key])&&v[key]>=0)out[key]=Math.round(Math.min(v[key],86400000));if(['REQUEST_TIMEOUT','CONNECTION_ERROR','HTTP_ERROR'].includes(v.lastError))out.lastError=v.lastError;if(['local_timeout','admin_timeout','visibility'].includes(v.cause))out.cause=v.cause;return out;}
 async function body(request){requireThat(Number(request.headers.get('content-length')||0)<32768,'요청이 너무 큽니다.',413);const text=await request.text();requireThat(text.length<32768,'요청이 너무 큽니다.',413);try{return JSON.parse(text);}catch{throw new Problem('요청 형식이 올바르지 않습니다.');}}
 async function authorized(db,id,user,secret,role){
   const row=await first(db,'SELECT * FROM sessions WHERE id=? AND owner=?',id,user);
@@ -40,7 +42,7 @@ async function commit(db,row,eventId,action,data,actor,extra={}){
     if(actor==='device'&&action==='touch'&&Number.isInteger(extra.generation)&&extra.generation<(before.resetGeneration||0))return row;
     if(actor==='admin'){
       requireThat(data.baseGeneration===before.generation,'다른 변경이 반영되었습니다. 현재 상태를 확인한 뒤 다시 눌러 주세요.',409);
-      if(!['abort','note','unpair','reset_records','create_schedule'].includes(action))requireThat(row.device_hash&&stamp-row.device_seen<3000,'iPad 연결을 확인해 주세요.',409);
+      if(!['abort','note','unpair','reset_records','create_schedule'].includes(action))requireThat(row.device_hash&&stamp-row.device_seen<WARN_MS,'iPad 연결을 확인해 주세요.',409);
     }
     if(action==='prepare'&&data.schedule)data=await scheduledPreparation(db,row,data);
     const {state,event}=transition(before,action,data,{now:stamp,newId:crypto.randomUUID(),applied:row.applied_generation===before.generation&&row.applied_trial===before.trial?.id});
@@ -106,6 +108,7 @@ export async function api(request,env){
         const count=Math.max(0,Math.min(10000,Number(url.searchParams.get('pending'))||0));
         await query(db,'UPDATE sessions SET device_seen=?,pending_events=? WHERE id=?',stamp,count,id).run();row.device_seen=stamp;row.pending_events=count;
       }else{await query(db,'UPDATE sessions SET admin_seen=? WHERE id=?',stamp,id).run();row.admin_seen=stamp;}
+      row=await first(db,'SELECT * FROM sessions WHERE id=?',id);
       const response=view(row);
       if(role==='admin')response.recentEvents=(await query(db,'SELECT type,server_time,payload FROM events WHERE session_id=? ORDER BY server_time DESC,id DESC LIMIT 12',id).all()).results;
       return json(response);
@@ -129,7 +132,7 @@ export async function api(request,env){
     if(operation==='audio-event'&&post){
       requireThat(role==='admin','진행자만 재생 기록을 전송할 수 있습니다.',403);
       requireThat(validId(data.id)&&validId(data.runId)&&validId(data.pageId),'재생 이벤트를 확인해 주세요.');
-      requireThat(['audio_started','audio_ended','operator_confirm','audio_flow_complete','audio_flow_stopped','audio_flow_error'].includes(data.type),'지원하지 않는 재생 이벤트입니다.');
+      requireThat(['audio_started','audio_ended','operator_confirm','audio_flow_complete','audio_flow_stopped','audio_flow_error','audio_connection_delayed','audio_connection_restored'].includes(data.type),'지원하지 않는 재생 이벤트입니다.');
       const run=await first(db,"SELECT trial_id,payload FROM events WHERE id=? AND session_id=? AND type='begin_audio'",data.runId,id);
       if(!run){
         const reset=rowState(await first(db,'SELECT * FROM sessions WHERE id=?',id)).resetGeneration||0;
@@ -145,7 +148,7 @@ export async function api(request,env){
     if(operation==='rejoin'&&post){
       requireThat(role==='device'&&validId(data.pageId),'iPad 연결 요청을 확인해 주세요.',403);
       requireThat(['reload','connection_gap','visibility'].includes(data.reason),'연결 사유를 확인해 주세요.');
-      row=await commit(db,row,data.id,'suspend',{reason:data.reason},'device',{pageId:data.pageId,clientTime:data.clientTime});
+      row=await commit(db,row,data.id,'suspend',{reason:data.reason,diagnostics:diagnostics(data.diagnostics)},'device',{pageId:data.pageId,clientTime:data.clientTime});
       await query(db,'UPDATE sessions SET page_id=?,device_seen=?,applied_generation=-1 WHERE id=?',data.pageId,now(),id).run();return json(view(await first(db,'SELECT * FROM sessions WHERE id=?',id)));
     }
     if(operation==='event'&&post){
@@ -168,7 +171,7 @@ export async function api(request,env){
         const touchData=data.pageId===row.page_id?data:{...data,generation:-1};
         return json(view(await commit(db,row,data.id,'touch',touchData,'device',data)));
       }
-      await query(db,"INSERT OR IGNORE INTO events (id,session_id,trial_id,type,actor,server_time,client_time,page_id,generation,payload) SELECT ?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM sessions WHERE id=? AND COALESCE(json_extract(state,'$.resetGeneration'),0)<=?)",data.id,id,data.trialId||null,data.type,'device',now(),String(data.clientTime||'').slice(0,40),data.pageId,data.generation,JSON.stringify({cueId:data.cueId||null,monotonicMs:data.monotonicMs??null}),id,data.generation).run();
+      await query(db,"INSERT OR IGNORE INTO events (id,session_id,trial_id,type,actor,server_time,client_time,page_id,generation,payload) SELECT ?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM sessions WHERE id=? AND COALESCE(json_extract(state,'$.resetGeneration'),0)<=?)",data.id,id,data.trialId||null,data.type,'device',now(),String(data.clientTime||'').slice(0,40),data.pageId,data.generation,JSON.stringify({cueId:data.cueId||null,monotonicMs:data.monotonicMs??null,...(['connection_lost','visibility_hidden'].includes(data.type)?{diagnostics:diagnostics(data.diagnostics)}:{})}),id,data.generation).run();
       if(data.type==='applied'&&data.pageId===row.page_id){
         await query(db,"UPDATE sessions SET applied_generation=?,applied_trial=? WHERE id=? AND json_extract(state,'$.generation')=? AND COALESCE(json_extract(state,'$.trial.id'),'')=?",data.generation,data.trialId||null,id,data.generation,data.trialId||'').run();
       }
