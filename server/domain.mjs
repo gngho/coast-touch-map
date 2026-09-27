@@ -1,4 +1,4 @@
-export const VERSION = '2.1.1';
+export const VERSION = '2.2.0';
 export const RELATIONSHIPS = ['friend','partner','coworker'];
 export const INTERVENTIONS = ['reactive','cue','suggestion','direct'];
 export class Problem extends Error { constructor(message,status=400){super(message);this.status=status;} }

@@ -2,6 +2,7 @@ import {load,save,request,endpoint} from '/sync.js';
 import {createNotice} from './notice.js';
 import {initAudio} from './audio.js';
 import {initRecordReset} from './reset.js';
+import {initReports} from './reports.js';
 const $=id=>document.getElementById(id);
 const relations={friend:'친구',partner:'연인',coworker:'직장동료'},methods={reactive:'Reactive',cue:'Proactive cue',suggestion:'Proactive suggestion',direct:'Proactive direct'};
 const icons={hidden:'숨김',idle:'Cue 대기',listening:'Listening',thinking:'Thinking',speaking:'Speaking'};
@@ -74,5 +75,6 @@ async function poll(){
 }
 setInterval(()=>{render();if(codeExpiry)$('code-expiry').textContent=Date.now()<codeExpiry?`유효 시간 ${Math.ceil((codeExpiry-Date.now())/1000)}초`:'코드가 만료되었습니다. 다시 생성하세요.';},1000);
 audio=initAudio({getAuth:()=>auth,getSnapshot:()=>snapshot,command,refresh:render});
-recordReset=initRecordReset({getSnapshot:()=>snapshot,command,onSuccess:()=>{$('participant').value='';$('note').value='';notice('기록을 초기화했습니다. 다음 시행은 01부터 시작하며 iPad 연결은 유지됩니다.');}});
+const reports=initReports({getAuth:()=>auth});
+recordReset=initRecordReset({getSnapshot:()=>snapshot,command,onSuccess:()=>{reports.clear();$('participant').value='';$('note').value='';notice('기록을 초기화했습니다. 다음 시행은 01부터 시작하며 iPad 연결은 유지됩니다.');}});
 boot();
