@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {api} from '../server/api.mjs';
 import {localDatabase} from '../server/dev-db.mjs';
 import {RELATIONSHIPS,INTERVENTIONS} from '../server/domain.mjs';
+import {DESIGN} from '../public/admin/schedule-model.js';
+import {summaryRows} from '../public/admin/report-model.js';
 const uid=()=>crypto.randomUUID();
 async function fixture(){
   const DB=localDatabase();let admin,device,pageId=uid(),state;
@@ -25,6 +27,43 @@ async function fixture(){
   }
   return {DB,admin,device,get pageId(){return pageId;},setPageId(value){pageId=value;},path,call,command,event,apply,start,refresh,get state(){return state;},close:()=>DB.close()};
 }
+
+test('saved Latin schedules enforce sequence, ownership, retries, condition integrity and survive session recovery',async()=>{
+  const f=await fixture();try{
+    const config={design:DESIGN,seed:'pilot',participants:['P001','P002']};
+    const id=uid();assert.equal((await f.command('create_schedule',{config},id)).status,200);
+    assert.equal((await f.command('create_schedule',{config},id)).status,200);
+    const read=()=>f.call(f.path('schedule'),{auth:f.admin});
+    let plans=(await read()).result.plans;assert.equal(plans.length,1);assert.equal(plans[0].participants.length,2);
+    assert.equal((await f.call(f.path('schedule'),{auth:f.device,role:'device'})).status,403);
+    assert.equal((await f.call(f.path('schedule'),{auth:f.admin,user:'other'})).status,403);
+    const step=plans[0].participants[0].steps[0],data={participant:'P001',relationship:step.relationship,intervention:step.intervention,scenario:step.scenario,schedule:{planId:id,position:1}};
+    assert.equal((await f.command('prepare',{...data,scenario:'wrong'})).status,409);
+    assert.equal((await f.command('prepare',{...data,schedule:{planId:id,position:2}})).status,409);
+    assert.equal((await f.command('prepare',data)).status,200);assert.equal(f.state.trial.schedule.poi,step.poi);
+    assert.equal((await f.command('end')).status,409);assert.equal((await f.command('create_schedule',{config})).status,409);
+    assert.equal((await f.command('abort')).status,200);plans=(await read()).result.plans;assert.equal(plans[0].participants[0].nextPosition,1);
+    assert.equal((await f.command('prepare',data)).status,200);await f.apply();await f.command('start');await f.command('end');
+    plans=(await read()).result.plans;assert.equal(plans[0].participants[0].nextPosition,2);assert.equal(plans[0].participants[0].steps[0].attempts.length,2);
+    assert.equal((await f.command('prepare',data)).status,409);
+    const exported=(await f.call(f.path('export?format=json'),{auth:f.admin})).result;
+    const summary=summaryRows(exported);assert.equal(summary[1]['배정표 ID'],id);assert.equal(summary[1]['참가자 내 배정 순서'],1);
+    const recovered=await f.call('/api/recover',{data:{}});assert.equal(recovered.status,200);f.admin.token=recovered.result.adminToken;await f.refresh();
+    assert.equal((await read()).result.plans[0].participants[0].completed,1);
+    assert.equal((await f.command('reset_records',{confirmation:'초기화',expectedTrialCount:2})).status,200);assert.equal((await read()).result.plans.length,0);
+    assert.equal((await f.command('prepare',data)).status,409);
+  }finally{f.close();}
+});
+
+test('Latin schedule creation works without an iPad, validates input and logs no previous trial ownership',async()=>{
+  const f=await fixture();try{
+    await f.start();await f.command('end');await f.command('unpair');
+    assert.equal((await f.command('create_schedule',{config:{design:DESIGN,seed:'ok',participants:['P1','P1']}})).status,400);
+    const id=uid();assert.equal((await f.command('create_schedule',{config:{design:DESIGN,seed:'ok',participants:['P1']}},id)).status,200);
+    const exportData=(await f.call(f.path('export?format=json'),{auth:f.admin})).result;
+    assert.equal(exportData.events.find(e=>e.id===id).trial_id,null);
+  }finally{f.close();}
+});
 
 test('record reset clears four practice trials, preserves pairing and cannot revive stale device/audio logs',async()=>{
   const f=await fixture();try{

@@ -1,4 +1,5 @@
-export const VERSION = '2.2.0';
+import {validateConfig} from '../public/admin/schedule-model.js';
+export const VERSION = '2.3.0';
 export const RELATIONSHIPS = ['friend','partner','coworker'];
 export const INTERVENTIONS = ['reactive','cue','suggestion','direct'];
 export class Problem extends Error { constructor(message,status=400){super(message);this.status=status;} }
@@ -16,12 +17,18 @@ export function transition(previous,action,data,context){
     requireThat(data.expectedTrialCount===s.trialCount,'시행 수가 변경되었습니다. 초기화 창을 다시 열어 주세요.',409);
     const count=s.trialCount;
     Object.assign(s,initialState(),{generation:previous.generation+1,audioRun:null,resetGeneration:previous.generation+1,lastReset:{id:data.id,at:now,clearedTrials:count}});
+  }else if(action==='create_schedule'){
+    requireThat(!active,'현재 시행을 먼저 종료하거나 중단해 주세요.',409);
+    let config;try{config=validateConfig(data.config);}catch(e){throw new Problem(e.message);}
+    s.schedule={id:data.id,count:config.participants.length,seed:config.seed};advance();
+    event.type='schedule_created';event.payload={id:data.id,config,createdAt:now,appVersion:VERSION};
   }else if(action==='prepare'){
     requireThat(!active,'먼저 현재 시행을 종료하거나 중단해 주세요.',409);
     requireThat(typeof data.participant==='string' && /^[A-Za-z0-9_-]{1,40}$/.test(data.participant),'참가자 ID는 영문·숫자·밑줄·하이픈 1–40자로 입력해 주세요.');
     requireThat(RELATIONSHIPS.includes(data.relationship)&&INTERVENTIONS.includes(data.intervention),'조건을 선택해 주세요.');
     requireThat(typeof data.scenario==='string'&&data.scenario.length<=100,'시나리오 식별자는 100자 이하로 입력해 주세요.');
     s.trialCount++;s.trial={id:context.newId,number:s.trialCount,participant:data.participant,relationship:data.relationship,intervention:data.intervention,scenario:data.scenario,appVersion:VERSION,status:'prepared',preparedAt:now,startedAt:null,endedAt:null};
+    if(data.schedule)s.trial.schedule=structuredClone(data.schedule);
     s.mode='experiment';s.suspended=false;s.cueId=null;s.touched=false;s.audioRun=null;hidden();advance();event.payload={...s.trial};
   }else if(action==='start'){
     requireThat(s.trial?.status==='prepared'&&!s.suspended,'준비된 시행이 필요합니다.',409);
@@ -29,6 +36,7 @@ export function transition(previous,action,data,context){
     s.trial.status='running';s.trial.startedAt=now;hidden();advance();
   }else if(action==='end'||action==='abort'){
     requireThat(active,'진행 중인 시행이 없습니다.',409);
+    if(action==='end'&&s.trial.schedule)requireThat(s.trial.status==='running','배정 시행은 시작 후 종료하거나, 시작 전에는 중단해 주세요.',409);
     s.trial.status=action==='end'?'ended':'aborted';s.trial.endedAt=now;hidden();advance();
   }else if(action==='setup'||action==='unpair'){
     requireThat(!active,'현재 시행을 먼저 종료해 주세요.',409);
