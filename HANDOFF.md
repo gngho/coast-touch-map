@@ -38,6 +38,8 @@
 
 ## 실행·배포
 
+- GitHub Actions 자동 검증·빌드·아티팩트 저장 추가. `.github/workflows/ci.yml`과 `docs/CI-AND-DEPLOYMENT.md` 참고. GitHub에서 Sites로의 자동 운영 배포는 연결되지 않았으며 완료로 표현하지 말 것.
+
 - Node.js 24+에서 `npm ci`, `npm test`, `npm run build`, `npm start`.
 - 로컬 서버는 loopback 전용 테스트 계정. 외부 공개 금지.
 - Cloudflare 이전 구성은 `CLOUDFLARE.md` 참조. Workers Builds 연결 후 main push → 테스트·번들 검증 → D1 마이그레이션 → 자동 배포. 계정 연결 전에는 활성화된 것으로 간주하지 않음.

@@ -74,6 +74,8 @@ Cloudflare 이전 및 자동 배포 설정은 [CLOUDFLARE.md](CLOUDFLARE.md)를 
 
 
 `npm run build`는 Cloudflare Worker를 `dist/cloudflare`에 검증 빌드합니다. 기존 Sites 번들은 `npm run build:sites`로 생성합니다. `.openai/hosting.json`은 기존 Site의 연결 정보입니다. 해당 Site 권한이 있는 환경에서 Sites 도구로 배포합니다. 기존 Sites에는 GitHub push만으로 배포되지 않습니다. 새 Cloudflare 사이트는 최초 계정·DB·Access·Git 연결 완료 후 `main` push로 자동 배포합니다.
+GitHub Actions는 테스트와 두 플랫폼의 빌드 아티팩트를 검증·보관합니다. [CI·배포 안내](docs/CI-AND-DEPLOYMENT.md)를 참고하세요.
+
 
 운영 DB, 로컬 DB, 참가자 로그 내보내기, 선택한 음원, 로그인 정보는 저장소에 포함하지 않습니다. 음원은 별도로 준비합니다. 스키마 변경은 `npm run db:generate`로 새 마이그레이션을 생성하며 이미 배포된 마이그레이션은 수정하지 않습니다.
 

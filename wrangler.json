@@ -12,15 +12,18 @@
     "html_handling": "none",
     "not_found_handling": "none"
   },
-  "d1_databases": [{
-    "binding": "DB",
-    "database_name": "coast-touch-map",
-    "database_id": "00000000-0000-0000-0000-000000000000",
-    "migrations_dir": "drizzle"
-  }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "coast-touch-map",
+      "database_id": "7813bcbd-174e-41ba-8e55-08f400fc08aa",
+      "migrations_dir": "drizzle"
+    }
+  ],
   "vars": {
     "ACCESS_TEAM_DOMAIN": "",
     "ACCESS_AUD": "",
     "ACCESS_ALLOWED_EMAIL": "rudgh0862@gmail.com"
-  }
+  },
+  "account_id": "52ac1f5e09e0c906807b1995c305620f"
 }
