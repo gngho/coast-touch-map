@@ -99,3 +99,11 @@ Direct의 대화 종료 후 무입력 답변, 진행자 새로고침 후 기존 
 - 자동 테스트 49개 통과. 네 조건에서 AI 발화마다 알림음 1회 선행, 동승자 대화 제외, 알림음 중 정지·오류 시 후속 음성 차단 검증.
 - 로컬 Chrome 두 컨텍스트에서 합성 WAV와 실제 Web Audio 알림음 버퍼를 재생. Suggestion은 대화→0.32초 알림음→제안→0.32초 알림음→답변, 나머지는 대화→0.32초 알림음→답변을 확인. 각 소리 시작 간격과 버퍼 길이로 겹침 없음 확인, 페이지 오류 0건. 현장 TV 음량·음색 청취는 별도 확인 필요.
 - Cloudflare 및 Sites 빌드 통과. 운영 DB 조작 없이 로컬 테스트 세션으로 확인.
+
+## 2.5.0 타이밍·실제 터치·가시성 검증 (2026-09-29)
+
+- 자동 테스트 55개 통과. 대화 source.start() 전 Listening 요청 없음, Thinking 대기에서 명령 왕복 차감, Cue Thinking 재시작 방지, 저장이 끝나지 않는 로그 어댑터에서도 클립 순서/간격 유지, 알림음 뒤 180ms 중 취소 시 음성 차단 확인.
+- Reactive/Cue의 단순 touched=true, 이전 run/trial 수락 기록, 반복 폴링/Space만으로는 답변 불가. 서버는 수락된 activation 없이 Thinking/Speaking을 거부. trusted pointerdown/up, 활성화 전 누르기·드래그·취소·자동/키보드 click 배제 검증.
+- 로컬 Chrome 두 컨텍스트와 합성 WAV로 네 조건 전 과정을 재생. PC audio-event 업로드 900ms, iPad applied 업로드 600ms 지연을 인위적으로 추가. 첫 Thinking 표시 시간: Reactive 498ms / Cue 629ms / Suggestion 510ms / Direct 500ms. 현장 네트워크의 보장값이 아닌 이 테스트의 관측값.
+- Reactive/Cue에서 실제 터치 전 1.2초 이상 대기 및 스크립트 click에도 대화 이후 추가 소리 없음. 실제 터치 후에만 진행. 모든 AI 발화 전 320ms 알림음+최소 180ms 간격, 네 조건 완료·Idle 복귀, 페이지 오류 0건 확인. 1194×834 화면에서 144px 아이콘과 상태/제안 문구 배치 확인.
+- 실제 iPad Safari·TV 음량 및 HDMI 지연은 별도 현장 확인 필요. 기존 운영 데이터는 조작하지 않고 로컬 테스트 DB 사용.

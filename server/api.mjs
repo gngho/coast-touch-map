@@ -45,7 +45,7 @@ async function commit(db,row,eventId,action,data,actor,extra={}){
       if(!['abort','note','unpair','reset_records','create_schedule','stop_audio'].includes(action))requireThat(row.device_hash&&stamp-row.device_seen<WARN_MS,'iPad 연결을 확인해 주세요.',409);
     }
     if(action==='prepare'&&data.schedule)data=await scheduledPreparation(db,row,data);
-    const {state,event}=transition(before,action,data,{now:stamp,newId:crypto.randomUUID(),applied:row.applied_generation===before.generation&&row.applied_trial===before.trial?.id});
+    const {state,event}=transition(before,action,data,{now:stamp,eventId,newId:crypto.randomUUID(),applied:row.applied_generation===before.generation&&row.applied_trial===before.trial?.id});
     const trial=state.trial;
     if(action==='reset_records'){
       // One transaction: a failed revision check must never delete any records.

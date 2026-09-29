@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {initializeAiWidget} from '../public/ai.js';
 
 // Minimal bubbling DOM fixture for input ordering; not a Safari emulator.
-function fixture() {
+function fixture(onTouch=()=>{}) {
   class Element {
     constructor(parent = null, dataset = {}) {
       this.parent = parent;
@@ -15,6 +15,7 @@ function fixture() {
       while (node) { if (node === this) return true; node = node.parent; }
       return false;
     }
+    removeAttribute(key) { delete this.attributes[key]; }
     setAttribute(key, value) { this.attributes[key] = value; }
     addEventListener(type, handler) {
       const handlers = this.handlers.get(type) || [];
@@ -46,8 +47,8 @@ function fixture() {
   doc.getElementById = id => elements[id];
   const previous = globalThis.document;
   globalThis.document = doc;
-  initializeAiWidget();
-  return {widget, toggle, panel, choices, doc, outside: new Element(doc), restore() {globalThis.document = previous;}};
+  const api=initializeAiWidget({onTouch});
+  return {api,widget, toggle, panel, choices, doc, outside: new Element(doc), restore() {globalThis.document = previous;}};
 }
 
 test('a touch-induced blur with no next focus does not discard a state selection', () => {
@@ -82,4 +83,20 @@ test('internal focus stays open; external focus, outside tap and Escape dismiss'
     assert.equal(f.panel.hidden, true);
     assert.equal(f.doc.activeElement, f.toggle);
   } finally { f.restore(); }
+});
+
+
+test('experiment requires a trusted press and release after arming; clicks and stale gestures cannot activate',()=>{
+  let touches=0;const f=fixture(()=>touches++);
+  try{
+    f.api.setMode(true);f.api.setTouchEnabled(false);
+    const pointer={pointerId:1,button:0,isPrimary:true,isTrusted:true,clientX:10,clientY:10};
+    f.toggle.emit('pointerdown',pointer);f.api.setTouchEnabled(true);f.toggle.emit('pointerup',pointer);
+    f.toggle.emit('click');f.toggle.emit('click',{isTrusted:true,detail:0});assert.equal(touches,0);
+    f.toggle.emit('pointerdown',{...pointer,isTrusted:false});f.toggle.emit('pointerup',pointer);assert.equal(touches,0);
+    f.toggle.emit('pointerdown',pointer);f.toggle.emit('pointerup',{...pointer,clientX:60});assert.equal(touches,0);
+    f.toggle.emit('pointerdown',pointer);f.toggle.emit('pointercancel');f.toggle.emit('pointerup',pointer);assert.equal(touches,0);
+    f.toggle.emit('pointerdown',pointer);f.api.setTouchEnabled(true);f.toggle.emit('pointerup',pointer);f.toggle.emit('click',{isTrusted:true});assert.equal(touches,1);
+    f.toggle.emit('pointerup',pointer);assert.equal(touches,1);
+  }finally{f.restore();}
 });

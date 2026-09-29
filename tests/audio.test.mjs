@@ -5,15 +5,16 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(intervention,options={}){
   const commands=[],events=[],clips=[],waits=[];
   const snapshot={state:{trial:{id:'trial',status:'running',intervention},suspended:false,touched:false}};
-  const flow=new AudioFlow({claim:async run=>{snapshot.state.audioRun={id:run.id,status:'running'};},command:async (action,data)=>{assert.equal(data.runId,snapshot.state.audioRun.id);assert.equal(data.trialId,'trial');commands.push([action,data.icon]);},play:async (asset,started)=>{clips.push(asset.meta.name);await started();},chime:async started=>started({name:'ai-chime-v1',duration:.32}),stop:()=>{},log:async (type,detail)=>events.push({type,detail}),changed:()=>{},wait:async ms=>waits.push(ms),...options});
+  const flow=new AudioFlow({claim:async run=>{snapshot.state.audioRun={id:run.id,status:'running'};},command:async (action,data)=>{assert.equal(data.runId,snapshot.state.audioRun.id);assert.equal(data.trialId,'trial');commands.push([action,data.icon]);if(['show_cue','arm_reactive'].includes(action))snapshot.state.cueId='armed';},play:async (asset,started)=>{clips.push(asset.meta.name);await started();},chime:async started=>started({name:'ai-chime-v1',duration:.32}),stop:()=>{},log:async (type,detail)=>events.push({type,detail}),changed:()=>{},now:()=>0,wait:async ms=>waits.push(ms),...options});
   flow.update(snapshot,true);
   const begin=()=>flow.begin({trial:snapshot.state.trial,assets:Object.fromEntries(['dialogue','prompt','answer'].map(k=>[k,{meta:{name:k}}])),delayMs:1000,pageId:'page'});
   return {flow,snapshot,commands,events,clips,waits,begin};
 }
+function touch(f){f.snapshot.state.touched=true;f.snapshot.state.activation={id:'touch',pageId:'ipad',trialId:'trial',cueId:'armed',runId:f.flow.run.id};}
 test('Reactive and Suggestion require exactly one operator confirmation after the correct clips',async()=>{
   for(const mode of ['reactive','suggestion']){
     const f=fixture(mode);await f.begin();
-    if(mode==='reactive'){assert.equal(f.flow.phase,'reactive_wait');assert.equal(await f.flow.confirm('Space'),false);f.snapshot.state.touched=true;f.flow.update(f.snapshot,true);}
+    if(mode==='reactive'){assert.equal(f.flow.phase,'reactive_wait');assert.equal(await f.flow.confirm('Space'),false);touch(f);f.flow.update(f.snapshot,true);}
     assert.equal(f.flow.phase,'response_wait');assert.deepEqual(f.clips,mode==='reactive'?['dialogue']:['dialogue','prompt']);
     const first=f.flow.confirm('Space'),second=f.flow.confirm('Space');
     assert.equal(await second,false);assert.equal(await first,true);
@@ -24,14 +25,14 @@ test('Reactive and Suggestion require exactly one operator confirmation after th
 });
 test('Cue waits for a touch then answers once; Direct animates and answers automatically',async()=>{
   const f=fixture('cue');await f.begin();assert.equal(f.flow.phase,'cue_wait');assert.deepEqual(f.clips,['dialogue']);
-  f.snapshot.state.touched=true;f.flow.update(f.snapshot,true);f.flow.update(f.snapshot,true);
+  touch(f);f.flow.update(f.snapshot,true);f.flow.update(f.snapshot,true);
   await tick();assert.equal(f.flow.phase,'complete');assert.deepEqual(f.clips,['dialogue','answer']);
   assert.deepEqual(f.commands,[['set_icon','listening'],['show_cue',undefined],['set_icon','thinking'],['set_icon','speaking'],['finish_audio',undefined]]);
   const direct=fixture('direct');await direct.begin();assert.deepEqual(direct.clips,['dialogue','answer']);assert.equal(direct.flow.phase,'complete');assert.deepEqual(direct.commands,[['set_icon','listening'],['set_icon','thinking'],['set_icon','speaking'],['finish_audio',undefined]]);
 });
 test('disconnect, suspension, trial switch and operator stop cancel pending answers without auto replay',async()=>{
   for(const reason of ['disconnect','suspend','switch','stop']){
-    let release;const f=fixture('reactive',{wait:()=>new Promise(r=>release=r)});await f.begin();f.snapshot.state.touched=true;f.flow.update(f.snapshot,true);const response=f.flow.confirm('Space');await tick();
+    let release;const f=fixture('reactive',{wait:()=>new Promise(r=>release=r)});await f.begin();touch(f);f.flow.update(f.snapshot,true);const response=f.flow.confirm('Space');await tick();
     if(reason==='stop')f.flow.cancel();
     else {if(reason==='suspend')f.snapshot.state.suspended=true;if(reason==='switch')f.snapshot.state.trial.id='other';f.flow.update(f.snapshot,reason!=='disconnect');}
     release();await response;assert.equal(f.flow.phase,'stopped');assert.deepEqual(f.clips,['dialogue']);
@@ -48,7 +49,7 @@ test('Space ignores key repeat, IME, modifiers and editable/interactive targets'
 
 test('Suggestion waits before its prompt and again after confirmation; cancel during prompt wait never plays it',async()=>{
   let release;const waits=[];
-  const f=fixture('suggestion',{wait:ms=>{waits.push(ms);return new Promise(r=>release=r);}});
+  const f=fixture('suggestion',{wait:ms=>{if(ms===180)return Promise.resolve();waits.push(ms);return new Promise(r=>release=r);}});
   const begin=f.begin();await tick();assert.deepEqual(f.clips,['dialogue']);assert.equal(f.flow.canConfirm,false);
   assert.deepEqual(waits,[1000]);release();await begin;assert.deepEqual(f.clips,['dialogue','prompt']);
   const confirm=f.flow.confirm('Space');await tick();assert.deepEqual(waits,[1000,1000]);assert.equal(f.clips.includes('answer'),false);
@@ -75,15 +76,10 @@ test('hard timeout during a soft-delay wait cancels and never resumes a queued a
 });
 
 
-test('audio waits for participant applied ACK; cancellation during ACK never starts a clip',async()=>{
-  for(const cancel of [false,true]){
-    let release;const f=fixture('reactive',{command:async()=>({state:{generation:3}}),wait:()=>new Promise(r=>release=r)});
-    f.snapshot.state.generation=3;f.snapshot.applied=false;
-    const beginning=f.begin();await tick();assert.deepEqual(f.clips,[]);
-    if(cancel)f.flow.cancel();else {f.snapshot.applied=true;f.flow.update(f.snapshot,true);}
-    release();await beginning;
-    assert.deepEqual(f.clips,cancel?[]:['dialogue']);assert.equal(f.flow.phase,cancel?'stopped':'reactive_wait');
-  }
+test('dialogue starts before Listening command and does not wait for applied audit ACK',async()=>{
+  const order=[];const f=fixture('suggestion',{play:async(asset,started)=>{order.push(asset.meta.name);await started();},command:async(action,data)=>{order.push(data.icon||action);return {state:{generation:3}};}});
+  f.snapshot.state.generation=3;f.snapshot.applied=false;
+  await f.begin();assert.deepEqual(order.slice(0,2),['dialogue','listening']);assert.equal(f.flow.phase,'response_wait');
 });
 
 test('cancellation while claiming stops a late successful claim without playing',async()=>{
@@ -108,7 +104,7 @@ test('each AI utterance has one completed chime before voice; human dialogue has
   for(const mode of ['reactive','cue','suggestion','direct']){
     const order=[];const f=fixture(mode,{chime:async started=>{order.push('chime');await started({name:'ai-chime-v1',duration:.32});},play:async(asset,started)=>{order.push(asset.meta.name);await started();}});
     await f.begin();
-    if(['reactive','cue'].includes(mode)){f.snapshot.state.touched=true;f.flow.update(f.snapshot,true);}
+    if(['reactive','cue'].includes(mode)){touch(f);f.flow.update(f.snapshot,true);}
     if(['reactive','suggestion'].includes(mode))await f.flow.confirm('button');
     await tick();assert.equal(f.flow.phase,'complete');
     assert.deepEqual(order,mode==='suggestion'?['dialogue','chime','prompt','chime','answer']:['dialogue','chime','answer']);
@@ -124,4 +120,36 @@ test('stop or playback failure during chime never starts the following AI voice'
     if(!fail)f.flow.cancel();finish();await begin;
     assert.deepEqual(f.clips,['dialogue']);assert.equal(f.flow.phase,fail?'error':'stopped');
   }
+});
+
+
+test('Reactive and Cue cannot answer from a stale or unlinked touched flag, even after repeated polls',async()=>{
+  for(const mode of ['reactive','cue']){
+    const f=fixture(mode);await f.begin();
+    for(const activation of [null,{id:'old',pageId:'ipad',runId:'old',trialId:'trial',cueId:'armed'},{id:'old',pageId:'ipad',runId:f.flow.run.id,trialId:'old',cueId:'armed'}]){
+      f.snapshot.state.touched=true;f.snapshot.state.activation=activation;
+      for(let i=0;i<10;i++)f.flow.update(f.snapshot,true);
+      assert.equal(f.flow.canConfirm,false);assert.equal(await f.flow.confirm('Space'),false);assert.deepEqual(f.clips,['dialogue']);
+      await assert.rejects(f.flow.answer(f.flow.epoch),/터치/);
+    }
+    touch(f);f.flow.update(f.snapshot,true);
+    if(mode==='reactive')await f.flow.confirm('Space');await tick();assert.equal(f.flow.phase,'complete');
+  }
+});
+
+test('Thinking subtracts command transit time; a stalled audit does not delay audio or the 180ms gap',async()=>{
+  let time=0;const waits=[],order=[];
+  const f=fixture('direct',{now:()=>time,command:async(action,data)=>{if(data.icon==='thinking')time+=350;},wait:async ms=>{waits.push(ms);time+=ms;},log:()=>new Promise(()=>{}),play:async(asset,started)=>{order.push(asset.meta.name);await started();}});
+  await f.begin();assert.deepEqual(waits,[650,180]);assert.deepEqual(order,['dialogue','answer']);assert.equal(f.flow.phase,'complete');
+});
+
+test('Cue uses time already spent Thinking since accepted touch without restarting the timer',async()=>{
+  const f=fixture('cue');await f.begin();touch(f);
+  f.snapshot.serverTime=1800;f.snapshot.state.activation.at=1000;f.snapshot.state.icon='thinking';
+  f.flow.update(f.snapshot,true);await tick();assert.deepEqual(f.waits,[200,180]);assert.equal(f.commands.filter(([action,icon])=>icon==='thinking').length,0);
+});
+
+test('cancelling in the post-chime gap never plays the AI voice',async()=>{
+  let release;const f=fixture('direct',{wait:ms=>ms===180?new Promise(r=>release=r):Promise.resolve()});
+  const begin=f.begin();await tick();assert.equal(f.flow.phase,'chime');f.flow.cancel();release();await begin;assert.deepEqual(f.clips,['dialogue']);
 });

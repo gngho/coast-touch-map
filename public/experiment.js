@@ -16,7 +16,7 @@ export function initializeExperiment(coast){
   if(auth&&load('coast.experiment-mode',false)){mode(true);safeIdle();}else setup();
   async function enqueue(type,extra={}){
     const event={id:crypto.randomUUID(),type,pageId,clientTime:new Date().toISOString(),generation:snapshot?.state.generation??0,trialId:snapshot?.state.trial?.id??null,sessionId:auth.id,order:++order,...extra};
-    try{await outbox.put(event);pending++;return event;}catch{storageOK=false;safeIdle();needsRejoin=true;reason='connection_gap';status('기기 로그 저장 공간을 사용할 수 없습니다. 진행자에게 알려 주세요.');throw Error('로그 임시 저장 실패');}
+    try{await outbox.put(event);pending++;void flushCritical();void flushApplied();return event;}catch{storageOK=false;safeIdle();needsRejoin=true;reason='connection_gap';status('기기 로그 저장 공간을 사용할 수 없습니다. 진행자에게 알려 주세요.');throw Error('로그 임시 저장 실패');}
   }
   async function touch(){
     if(!display||pendingTouch||!storageOK||needsRejoin||!snapshot||snapshot.state.touched||!snapshot.state.touchReady)return;
@@ -37,7 +37,7 @@ export function initializeExperiment(coast){
       ai.setVisible(true);
       if(!pendingTouch)ai.setState(running&&s.icon!=='hidden'?s.icon:'idle');
       if(!armed||display?.cueId!==s.cueId||display?.generation!==s.generation)display=null;
-      ai.setTouchEnabled?.(false);
+      if(!armed||!display||pendingTouch)ai.setTouchEnabled?.(false);
       if(armed&&!display&&!pendingTouch){
         await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
         if(needsRejoin||document.hidden||snapshot.state.generation!==s.generation)return;
@@ -63,18 +63,22 @@ export function initializeExperiment(coast){
       auth={id:result.id,token:result.deviceToken};save('coast.device.v2',auth);needsRejoin=false;lastSuccess=performance.now();await apply(result);
     }catch(error){status(error.message);}finally{button.disabled=false;}
   };
-  const flush=singleFlight(async()=>{
+  const criticalTypes=new Set(['cue_displayed','reactive_ready','touch']);
+  const lane=event=>criticalTypes.has(event.type)?'touch':event.type==='applied'?'applied':'audit';
+  const makeFlush=kind=>singleFlight(async()=>{
     if(!auth||document.hidden||superseded||needsRejoin)return;
     const target=auth;
     try{
       const queue=(await outbox.all()).filter(e=>e.sessionId===target.id);pending=queue.length;
-      for(const event of queue.slice(0,20)){
+      for(const event of queue.filter(e=>lane(e)===kind).slice(0,20)){
         if(auth!==target||needsRejoin||document.hidden||superseded)break;
-        await request(endpoint(target,'event'),{auth:target,role:'device',method:'POST',data:event});
+        const result=await request(endpoint(target,'event'),{auth:target,role:'device',method:'POST',data:event});
+        if(event.type==='touch'&&result.state)await apply(result);
         await outbox.remove(event.id);pending=Math.max(0,pending-1);
       }
     }catch(error){lastError=error.code||'HTTP_ERROR';status('로그 저장 대기 · '+error.message);}
   });
+  const flush=makeFlush('audit'),flushCritical=makeFlush('touch'),flushApplied=makeFlush('applied');
   async function tick(){
     if(polling)return;polling=true;
     try{
@@ -89,7 +93,7 @@ export function initializeExperiment(coast){
       await apply(result);
       if(!result.adminConnected)status('진행자 연결 응답 지연 · 복구 확인 중');
     }catch(error){lastError=error.code||'HTTP_ERROR';status(error.message);if(error.status===409&&error.message.includes('다른 화면')){superseded=true;safeIdle();}if(error.status===403){safeIdle();auth=null;snapshot=null;needsRejoin=false;localStorage.removeItem('coast.device.v2');mode(false);setup();$('pair-form').hidden=false;status('연결이 해제되었습니다. 새 연결 코드를 입력하세요.');}}
-    finally{polling=false;void flush();setTimeout(tick,250);}
+    finally{polling=false;void flush();void flushCritical();void flushApplied();setTimeout(tick,150);}
   }
   setInterval(()=>{
     if(auth&&!superseded&&!needsRejoin&&lastSuccess){const age=performance.now()-lastSuccess;if(age>=LOST_MS)loseConnection('local_timeout');else if(age>=WARN_MS)status('연결 응답 지연 · 복구 확인 중');}

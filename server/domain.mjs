@@ -1,10 +1,10 @@
 import {validateConfig} from '../public/admin/schedule-model.js';
-export const VERSION = '2.4.1';
+export const VERSION = '2.5.0';
 export const RELATIONSHIPS = ['friend','partner','coworker'];
 export const INTERVENTIONS = ['reactive','cue','suggestion','direct'];
 export class Problem extends Error { constructor(message,status=400){super(message);this.status=status;} }
 export const requireThat = (ok,message,status=400)=>{if(!ok)throw new Problem(message,status);};
-export function initialState(){return {mode:'setup',generation:0,trial:null,icon:'idle',cueId:null,touchReady:false,touched:false,suspended:false,trialCount:0};}
+export function initialState(){return {mode:'setup',generation:0,trial:null,icon:'idle',cueId:null,touchReady:false,activation:null,touched:false,suspended:false,trialCount:0};}
 export function transition(previous,action,data,context){
   const s=structuredClone(previous), now=context.now;
   const active=s.trial && ['prepared','running'].includes(s.trial.status);
@@ -35,7 +35,7 @@ export function transition(previous,action,data,context){
     requireThat(typeof data.scenario==='string'&&data.scenario.length<=100,'시나리오 식별자는 100자 이하로 입력해 주세요.');
     s.trialCount++;s.trial={id:context.newId,number:s.trialCount,participant:data.participant,relationship:data.relationship,intervention:data.intervention,scenario:data.scenario,appVersion:VERSION,status:'prepared',preparedAt:now,startedAt:null,endedAt:null};
     if(data.schedule)s.trial.schedule=structuredClone(data.schedule);
-    s.mode='experiment';s.suspended=false;s.cueId=null;s.touched=false;s.audioRun=null;idle();advance();event.payload={...s.trial};
+    s.mode='experiment';s.suspended=false;s.cueId=null;s.activation=null;s.touched=false;s.audioRun=null;idle();advance();event.payload={...s.trial};
   }else if(action==='start'){
     requireThat(s.trial?.status==='prepared'&&!s.suspended,'준비된 시행이 필요합니다.',409);
     requireThat(context.applied,'iPad에 조건이 적용될 때까지 기다려 주세요.',409);
@@ -46,7 +46,7 @@ export function transition(previous,action,data,context){
     s.trial.status=action==='end'?'ended':'aborted';s.trial.endedAt=now;if(s.audioRun?.status==='running')s.audioRun.status='stopped';idle();advance();
   }else if(action==='setup'||action==='unpair'){
     requireThat(!active,'현재 시행을 먼저 종료해 주세요.',409);
-    s.mode='setup';s.suspended=false;s.cueId=null;s.touched=false;idle();advance();
+    s.mode='setup';s.suspended=false;s.cueId=null;s.activation=null;s.touched=false;idle();advance();
   }else if(action==='show_cue'||action==='arm_reactive'){
     const cue=action==='show_cue';
     requireThat(s.trial?.status==='running'&&s.trial.intervention===(cue?'cue':'reactive')&&!s.suspended,'현재 조건에서 터치를 준비할 수 없습니다.',409);
@@ -55,6 +55,10 @@ export function transition(previous,action,data,context){
   }else if(action==='set_icon'){
     requireThat(s.trial?.status==='running'&&!s.suspended,'진행 중인 시행에서만 변경할 수 있습니다.',409);
     requireThat(['idle','listening','thinking','speaking'].includes(data.icon),'잘못된 아이콘 상태입니다.');
+    if(['reactive','cue'].includes(s.trial.intervention)&&['thinking','speaking'].includes(data.icon)){
+      const a=s.activation;
+      requireThat(s.touched&&a?.id&&a.cueId===s.cueId&&a.trialId===s.trial.id&&(!data.runId||a.runId===data.runId),'현재 시행의 참가자 터치가 먼저 필요합니다.',409);
+    }
     s.touchReady=false;s.icon=data.icon;advance();event.payload={icon:data.icon};
   }else if(action==='finish_audio'||action==='stop_audio'){
     requireThat(data.runId&&s.audioRun?.status==='running','진행 중인 재생이 없습니다.',409);
@@ -63,7 +67,7 @@ export function transition(previous,action,data,context){
     const reactive=s.trial?.intervention==='reactive';
     const accepted=s.trial?.id===data.trialId&&s.trial?.status==='running'&&['reactive','cue'].includes(s.trial.intervention)&&data.touchKind===(reactive?'reactive_ready':'cue_displayed')&&s.cueId===data.cueId&&s.touchReady&&!s.touched&&!s.suspended&&s.icon===(reactive?'idle':'twinkle')&&data.generation===s.generation;
     event.type=data.touchKind==='reactive_ready'?'reactive_touch':'cue_touch';event.payload={cueId:data.cueId,accepted,reactionMs:data.reactionMs,displayEventId:data.displayEventId};
-    if(accepted){s.touched=true;s.touchReady=false;s.icon=reactive?'listening':'thinking';advance();}
+    if(accepted){s.activation={id:context.eventId,at:now,pageId:data.pageId,trialId:s.trial.id,cueId:s.cueId,runId:s.audioRun?.id||null};s.touched=true;s.touchReady=false;s.icon=reactive?'listening':'thinking';advance();}
   }else if(action==='suspend'){
     s.suspended=true;if(s.audioRun?.status==='running')s.audioRun.status='stopped';idle();advance();event.payload={reason:data.reason,...(data.diagnostics?{diagnostics:data.diagnostics}:{})};
   }else if(action==='resume'){

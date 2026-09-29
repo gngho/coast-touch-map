@@ -5,7 +5,7 @@ export function createChime(context){
   for(let i=0;i<samples.length;i++){
     const t=i/context.sampleRate;
     const envelope=Math.min(t/.006,1)*Math.exp(-t*13)*Math.min((samples.length-1-i)/(context.sampleRate*.025),1);
-    samples[i]=.22*envelope*(Math.sin(2*Math.PI*880*t)+.45*Math.sin(2*Math.PI*1320*t))/1.45;
+    samples[i]=.31*envelope*(Math.sin(2*Math.PI*880*t)+.45*Math.sin(2*Math.PI*1320*t))/1.45;
   }
-  return {buffer,meta:{name:'ai-chime-v1',duration:buffer.duration}};
+  return {buffer,meta:{name:'ai-chime-v2',duration:buffer.duration}};
 }

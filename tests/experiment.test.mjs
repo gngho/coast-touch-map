@@ -124,7 +124,10 @@ test('12 conditions share four visible states; only Cue can Twinkle and Reactive
   const f=await fixture();try{
     for(const relationship of RELATIONSHIPS)for(const intervention of INTERVENTIONS){
       await f.start(relationship,intervention);assert.equal(f.state.icon,'idle');
-      for(const icon of ['idle','listening','thinking','speaking']){assert.equal((await f.command('set_icon',{icon})).status,200);assert.equal(f.state.icon,icon);}
+      for(const icon of ['idle','listening','thinking','speaking']){
+        const locked=['reactive','cue'].includes(intervention)&&['thinking','speaking'].includes(icon);
+        assert.equal((await f.command('set_icon',{icon})).status,locked?409:200);if(!locked)assert.equal(f.state.icon,icon);
+      }
       assert.equal((await f.command('set_icon',{icon:'hidden'})).status,400);
       const result=await f.command('show_cue');assert.equal(result.status,intervention==='cue'?200:409);
       if(intervention==='cue')assert.equal(f.state.icon,'twinkle');
@@ -236,7 +239,7 @@ test('audio claims are once per trial; authenticated logs are idempotent and rem
 });
 
 
-test('all four audio flows apply visible states before clips, consume valid touch once and return Idle',async()=>{
+test('all four flows start dialogue before Listening, require linked touch and return Idle',async()=>{
   for(const intervention of INTERVENTIONS){
     const f=await fixture();try{
       await f.start('friend',intervention);
@@ -251,10 +254,10 @@ test('all four audio flows apply visible states before clips, consume valid touc
         const r=await f.command('begin_audio',{pageId:run.pageId,delayMs:run.delayMs,assets:Object.fromEntries(Object.entries(run.assets).map(([k,a])=>[k,a.meta]))},run.id);
         assert.equal(r.status,200);await sync();
       },command,play:async(asset,started)=>{
-        const view=await f.refresh();assert.equal(view.applied,true);
-        const expected=asset.meta.name==='dialogue'?(intervention==='reactive'?'idle':'listening'):'speaking';
+        await f.refresh();
+        const expected=asset.meta.name==='dialogue'?'idle':'speaking';
         assert.equal(f.state.icon,expected);clips.push(asset.meta.name);await started();
-      },chime:async started=>{assert.equal(f.state.icon,'speaking');await started({name:'ai-chime-v1',duration:.32});},stop(){},log:async type=>events.push(type),changed(){},wait:async ms=>waits.push(ms)});
+      },chime:async started=>{assert.equal(f.state.icon,'speaking');await started({name:'ai-chime-v1',duration:.32});},stop(){},log:async type=>events.push(type),changed(){},now:()=>0,wait:async ms=>waits.push(ms)});
       await sync();const assets=Object.fromEntries(['dialogue','prompt','answer'].map(k=>[k,{meta:{name:k,duration:1,sha256:'a'.repeat(64)}}]));
       assert.equal(await flow.begin({trial:f.state.trial,assets,delayMs:1000,pageId:uid()}),true);
       if(['reactive','cue'].includes(intervention)){
@@ -270,8 +273,8 @@ test('all four audio flows apply visible states before clips, consume valid touc
       for(let i=0;i<100&&flow.active;i++)await tick();
       assert.equal(flow.phase,'complete');assert.equal(f.state.icon,'idle');assert.equal(f.state.audioRun.status,'complete');
       assert.deepEqual(clips,intervention==='suggestion'?['dialogue','prompt','answer']:['dialogue','answer']);
-      assert.deepEqual(waits,intervention==='suggestion'?[1000,1000]:[1000]);
-      assert.deepEqual(states,({reactive:['idle','idle','thinking','speaking','idle'],cue:['listening','twinkle','thinking','speaking','idle'],suggestion:['listening','thinking','speaking','listening','thinking','speaking','idle'],direct:['listening','thinking','speaking','idle']})[intervention]);
+      assert.equal(waits.filter(ms=>ms===180).length,intervention==='suggestion'?2:1);assert.ok(waits.every(ms=>ms>=0&&ms<=1000));
+      assert.deepEqual(states,({reactive:['idle','idle','thinking','speaking','idle'],cue:['listening','twinkle','speaking','idle'],suggestion:['listening','thinking','speaking','listening','thinking','speaking','idle'],direct:['listening','thinking','speaking','idle']})[intervention]);
       assert.equal(events.filter(x=>x==='audio_flow_complete').length,1);
       const exported=(await f.call(f.path('export?format=json'),{auth:f.admin})).result;
       assert.equal(exported.events.filter(e=>['cue_touch','reactive_touch'].includes(e.type)&&e.payload.accepted).length,['reactive','cue'].includes(intervention)?1:0);
@@ -291,4 +294,22 @@ test('stopped and superseded runs reject late visual commands; disconnected stop
     await f.command('abort');await f.start('friend','reactive');
     assert.equal((await f.command('stop_audio',{runId,trialId})).status,409);assert.equal(f.state.icon,'idle');assert.equal(f.state.audioRun,null);
   }finally{f.close();}
+});
+
+
+test('server refuses AI response before a current participant touch and stores a bound activation receipt',async()=>{
+  for(const mode of ['reactive','cue']){
+    const f=await fixture();try{
+      await f.start('friend',mode);const runId=uid(),asset={name:'x',duration:1,sha256:'a'.repeat(64)},trialId=f.state.trial.id;
+      await f.command('begin_audio',{pageId:uid(),delayMs:500,assets:{dialogue:asset,answer:asset}},runId);
+      for(const icon of ['thinking','speaking'])assert.equal((await f.command('set_icon',{icon,runId,trialId})).status,409);
+      await f.command(mode==='cue'?'show_cue':'arm_reactive',{runId,trialId});
+      assert.equal((await f.command('set_icon',{icon:'speaking',runId,trialId})).status,409);
+      const displayId=uid(),id=uid(),cueId=f.state.cueId;
+      await f.event(mode==='cue'?'cue_displayed':'reactive_ready',{id:displayId,cueId,monotonicMs:100});
+      await f.event('touch',{id,cueId,displayEventId:displayId,reactionMs:100});await f.refresh();
+      assert.equal(f.state.activation.id,id);assert.equal(f.state.activation.pageId,f.pageId);assert.equal(f.state.activation.runId,runId);assert.equal(f.state.activation.trialId,trialId);
+      assert.equal((await f.command('set_icon',{icon:'speaking',runId,trialId})).status,200);
+    }finally{f.close();}
+  }
 });

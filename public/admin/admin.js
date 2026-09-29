@@ -6,7 +6,7 @@ import {initReports} from './reports.js';
 import {initSchedules} from './schedules.js';
 import {connectionHealth} from '/connection.js';
 const $=id=>document.getElementById(id);
-const UI_VERSION='2.4.1';
+const UI_VERSION='2.5.0';
 const relations={friend:'친구',partner:'연인',coworker:'직장동료'},methods={reactive:'Reactive',cue:'Proactive cue',suggestion:'Proactive suggestion',direct:'Proactive direct'};
 const icons={idle:'Idle',twinkle:'Twinkle',listening:'Listening',thinking:'Thinking',speaking:'Speaking'};
 const statuses={prepared:'준비 완료',running:'진행 중',ended:'종료',aborted:'중단'};
@@ -40,7 +40,7 @@ function render(){
   const cue=control&&!audio?.active&&t?.status==='running'&&t.intervention==='cue';
   $('show-cue').disabled=!cue||s?.audioRun?.status==='running'||!!s?.cueId;
   $('arm-reactive').disabled=!control||audio?.active||s?.audioRun?.status==='running'||t?.status!=='running'||t.intervention!=='reactive'||!!s?.cueId;
-  document.querySelectorAll('[data-icon]').forEach(b=>{b.disabled=!control||audio?.active||s?.audioRun?.status==='running'||t?.status!=='running';b.classList.toggle('selected',s?.icon===b.dataset.icon);});
+  document.querySelectorAll('[data-icon]').forEach(b=>{b.disabled=!control||audio?.active||s?.audioRun?.status==='running'||t?.status!=='running'||(['reactive','cue'].includes(t?.intervention)&&['thinking','speaking'].includes(b.dataset.icon)&&!s?.activation);b.classList.toggle('selected',s?.icon===b.dataset.icon);});
   $('save-note').disabled=!t||busy;$('note').disabled=!t||busy;
   $('trial-number').textContent=t?`시행 ${String(t.number).padStart(2,'0')}`:'다음 시행 01';
   $('trial-status').textContent=s?.mode==='setup'?'준비 모드':statuses[t?.status]||'대기';
@@ -79,7 +79,7 @@ async function poll(){
   if(pollBusy)return;pollBusy=true;
   try{if(!auth)return;const next=await request(endpoint(auth,'state'),{auth});if(!snapshot||next.state.generation>=snapshot.state.generation)snapshot=next;lastSuccess=performance.now();messages.connectionRestored();}
   catch(error){messages.error(error);if(error.status===403){auth=null;localStorage.removeItem('coast.admin.v2');}}
-  finally{pollBusy=false;render();setTimeout(poll,250);}
+  finally{pollBusy=false;render();setTimeout(poll,150);}
 }
 setInterval(()=>{render();if(codeExpiry)$('code-expiry').textContent=Date.now()<codeExpiry?`유효 시간 ${Math.ceil((codeExpiry-Date.now())/1000)}초`:'코드가 만료되었습니다. 다시 생성하세요.';},1000);
 audio=initAudio({getAuth:()=>auth,getSnapshot:()=>snapshot,command,refresh:render});

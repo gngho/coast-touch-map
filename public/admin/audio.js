@@ -7,6 +7,7 @@ export function initAudio({getAuth,getSnapshot,command,refresh}){
   const assets={},versions={};let context,source,rejectPlayback,flushing=false,preparing=false,pending=0,queueError='',configKey=null,testing=false;
   const ctx=()=>context||(context=new AudioContext());
   let chimeAsset;
+  let logOrder=Date.now();
   function stop(){const s=source;source=null;if(s){s.onended=null;try{s.stop();}catch{}}if(rejectPlayback){const reject=rejectPlayback;rejectPlayback=null;reject(new Error('재생이 중지되었습니다.'));}}
   function play(asset,started){
     return new Promise((resolve,reject)=>{
@@ -18,7 +19,7 @@ export function initAudio({getAuth,getSnapshot,command,refresh}){
   }
   async function log(type,detail,run){
     if(!run)return;
-    const event={id:crypto.randomUUID(),runId:run.id,trialId:run.trialId,pageId:run.pageId,type,detail,clientTime:new Date().toISOString(),monotonicMs:performance.now(),generation:getSnapshot()?.state.generation||0,sessionId:getAuth()?.id,order:Date.now()};
+    const event={id:crypto.randomUUID(),runId:run.id,trialId:run.trialId,pageId:run.pageId,type,detail,clientTime:new Date().toISOString(),monotonicMs:performance.now(),generation:getSnapshot()?.state.generation||0,sessionId:getAuth()?.id,order:++logOrder};
     await outbox.put(event);pending++;render();void flush();
   }
   async function flush(){
