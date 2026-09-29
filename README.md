@@ -69,6 +69,8 @@ npm start
 
 ## 배포·데이터·측정 범위
 
+GitHub Actions는 `main` push와 PR마다 테스트·빌드를 실행하고 커밋별 빌드 파일을 저장합니다. **이는 자동 검증이며 자동 운영 배포는 아닙니다.** 현재 연동 범위와 게시 절차는 [CI·배포 안내](docs/CI-AND-DEPLOYMENT.md)를 확인하세요.
+
 `npm run build`는 `dist/server/index.js`와 Sites 설정·마이그레이션을 생성합니다. `.openai/hosting.json`은 기존 Site의 연결 정보입니다. 해당 Site 권한이 있는 환경에서 Sites 도구로 배포합니다. **GitHub push만으로 운영 사이트가 자동 배포되지는 않습니다.**
 
 운영 DB, 로컬 DB, 참가자 로그 내보내기, 선택한 음원, 로그인 정보는 저장소에 포함하지 않습니다. 음원은 별도로 준비합니다. 스키마 변경은 `npm run db:generate`로 새 마이그레이션을 생성하며 이미 배포된 마이그레이션은 수정하지 않습니다.

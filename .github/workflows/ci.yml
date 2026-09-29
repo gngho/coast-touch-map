@@ -1,0 +1,64 @@
+name: Coast checks and build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coast-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Test and package (Node 24)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run regression tests
+        run: npm test
+      - name: Build Sites Worker and assets
+        run: npm run build
+      - name: Package build with Sites configuration
+        run: |
+          test -s dist/server/index.js
+          test -s dist/.openai/hosting.json
+          test -s dist/.openai/drizzle/0000_complete_blockbuster.sql
+          tar -czf coast-build.tar.gz -C dist .
+          sha256sum coast-build.tar.gz > coast-build.tar.gz.sha256
+          printf '%s\n' "$GITHUB_SHA" > source-commit.txt
+      - name: Upload verified build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coast-build-${{ github.sha }}
+          path: |
+            coast-build.tar.gz
+            coast-build.tar.gz.sha256
+            source-commit.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: Explain deployment status
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ## Coast 검증 완료 — 운영 배포 아님
+          - 회귀 테스트와 Worker 빌드가 통과했습니다.
+          - 커밋별 빌드, 체크섬, 소스 SHA를 아티팩트로 저장했습니다.
+          - 기존 chatgpt.site는 변경하지 않았습니다.
+          - Sites 게시 도구에서 동일 소스 커밋을 동기화하고 배포해야 운영에 반영됩니다.
+          SUMMARY
