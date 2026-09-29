@@ -1,6 +1,6 @@
 # Coast — 차량 AI 상호작용 실험
 
-iPad 참가자용 내비게이션 자극과 PC 진행자용 관리자 화면을 포함한 연구용 웹앱입니다. 현재 화면·서버 버전은 **2.3.2**입니다. package.json의 2.0.0은 초기 패키지 버전입니다.
+iPad 참가자용 내비게이션 자극과 PC 진행자용 관리자 화면을 포함한 연구용 웹앱입니다. 현재 화면·서버 버전은 **2.4.0**입니다. package.json의 2.0.0은 초기 패키지 버전입니다.
 
 ## 포함된 기능
 
@@ -44,14 +44,14 @@ npm start
 5. **동승자 대화 재생 · 자동 진행**을 클릭합니다. Space는 초기 재생이 아닌 응답 대기 중 확인 키입니다.
 6. 답변 재생 후 진행자가 시행 종료 또는 중단을 선택합니다. 로그 저장 대기가 0건인지 확인합니다.
 
-| 조건 | 초반 대화 이후 |
+| 조건 | Idle 준비 상태 이후 |
 |---|---|
-| Reactive | 참가자 호출 → 진행자 확인 → 설정 대기 → 답변 |
-| Cue | 아이콘 표시 → 첫 터치 → Listening/Thinking → 답변·Speaking → 숨김 |
-| Suggestion | 설정 대기 → AI 제안 → 참가자 응답 → 진행자 확인 → 설정 대기 → 답변 |
-| Direct | 설정 대기 → 답변 |
+| Reactive | Idle 대화 → 아이콘 터치 → Listening 요청 발화 → 진행자 확인 → Thinking → Speaking 답변 → Idle |
+| Cue | Listening 대화 → Twinkle → 아이콘 터치 → Thinking → Speaking 답변 → Idle |
+| Suggestion | Listening 대화 → Thinking → Speaking 제안 → Listening 응답 → 진행자 확인 → Thinking → Speaking 답변 → Idle |
+| Direct | Listening 대화 → Thinking → Speaking 답변 → Idle |
 
-실험 중 아이콘은 Cue 조건에서만 나타납니다. 소리는 PC에서 나므로 OS 출력 장치를 TV/HDMI로 지정합니다. 음원은 업로드되지 않으며 새로고침이나 조건 변경 시 다시 선택해야 합니다.
+아이콘은 모든 조건에서 상시 표시하며 숨김 상태는 없습니다. Cue만 Twinkle 도움 제안 상태를 사용합니다. 화면 적용 확인 후 해당 음원을 시작하며, Thinking 대기는 기본 1초입니다. 소리는 PC에서 나므로 OS 출력 장치를 TV/HDMI로 지정합니다. 음원은 업로드되지 않으며 새로고침이나 조건 변경 시 다시 선택해야 합니다.
 
 ## 코드 구조
 

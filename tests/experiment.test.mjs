@@ -5,7 +5,9 @@ import {localDatabase} from '../server/dev-db.mjs';
 import {RELATIONSHIPS,INTERVENTIONS} from '../server/domain.mjs';
 import {DESIGN} from '../public/admin/schedule-model.js';
 import {summaryRows} from '../public/admin/report-model.js';
+import {AudioFlow} from '../public/admin/audio-flow.js';
 const uid=()=>crypto.randomUUID();
+const tick=()=>new Promise(resolve=>setImmediate(resolve));
 async function fixture(){
   const DB=localDatabase();let admin,device,pageId=uid(),state;
   async function call(path,{data,auth,role='admin',user='owner',origin='https://coast.test'}={}){
@@ -75,7 +77,7 @@ test('record reset clears four practice trials, preserves pairing and cannot rev
     assert.equal((await f.command('reset_records',confirmed)).status,409);
     const runId=uid(),audioPage=uid(),asset={name:'practice.wav',duration:1,sha256:'a'.repeat(64)};
     await f.command('begin_audio',{pageId:audioPage,delayMs:1000,assets:{dialogue:asset,answer:asset}},runId);
-    await f.command('show_cue');
+    await f.command('show_cue',{runId,trialId:f.state.trial.id});
     const old={trialId:f.state.trial.id,generation:f.state.generation,cueId:f.state.cueId},displayId=uid();
     await f.event('cue_displayed',{...old,id:displayId,monotonicMs:100});
     await f.command('note',{note:'연습용 메모'});await f.command('end');
@@ -88,7 +90,7 @@ test('record reset clears four practice trials, preserves pairing and cannot rev
     await f.DB.prepare('UPDATE sessions SET device_seen=0 WHERE id=?').bind(f.admin.id).run();
     const resets=await Promise.all([f.call(f.path('command'),{auth:f.admin,data:payload}),f.call(f.path('command'),{auth:f.admin,data:payload})]);
     assert.deepEqual(resets.map(r=>r.status),[200,200]);await f.refresh();
-    assert.equal(f.state.generation,generation+1);assert.equal(f.state.trialCount,0);assert.equal(f.state.trial,null);assert.equal(f.state.mode,'setup');assert.equal(f.state.icon,'hidden');assert.equal(f.state.audioRun,null);
+    assert.equal(f.state.generation,generation+1);assert.equal(f.state.trialCount,0);assert.equal(f.state.trial,null);assert.equal(f.state.mode,'setup');assert.equal(f.state.icon,'idle');assert.equal(f.state.audioRun,null);
     let exported=await f.call(f.path('export?format=json'),{auth:f.admin});assert.deepEqual(exported.result.trials,[]);assert.deepEqual(exported.result.events,[]);
     const oldTouch=await f.event('touch',{...old,displayEventId:displayId,reactionMs:200});assert.equal(oldTouch.status,200);assert.equal(oldTouch.result.discarded,true);
     assert.equal((await f.event('applied',{generation:old.generation,trialId:null})).result.discarded,true);
@@ -118,12 +120,16 @@ test('a simultaneous new trial and reset cannot erase a newly prepared trial',as
     if(f.state.trial){assert.equal(f.state.trial.participant,'P002');assert.equal(exported.result.trials.length,2);}else assert.equal(exported.result.trials.length,0);
   }finally{f.close();}
 });
-test('12 conditions preserve their metadata and only Cue can display an icon',async()=>{
+test('12 conditions share four visible states; only Cue can Twinkle and Reactive can arm Idle',async()=>{
   const f=await fixture();try{
     for(const relationship of RELATIONSHIPS)for(const intervention of INTERVENTIONS){
-      await f.start(relationship,intervention);assert.equal(f.state.icon,'hidden');
+      await f.start(relationship,intervention);assert.equal(f.state.icon,'idle');
+      for(const icon of ['idle','listening','thinking','speaking']){assert.equal((await f.command('set_icon',{icon})).status,200);assert.equal(f.state.icon,icon);}
+      assert.equal((await f.command('set_icon',{icon:'hidden'})).status,400);
       const result=await f.command('show_cue');assert.equal(result.status,intervention==='cue'?200:409);
-      await f.command('end');assert.equal(f.state.icon,'hidden');
+      if(intervention==='cue')assert.equal(f.state.icon,'twinkle');
+      assert.equal((await f.command('arm_reactive')).status,intervention==='reactive'?200:409);
+      await f.command('end');assert.equal(f.state.icon,'idle');
     }
     const exported=await f.call(f.path('export?format=json'),{auth:f.admin});
     assert.equal(exported.result.trials.length,12);assert.deepEqual(exported.result.trials.map(t=>t.number),Array.from({length:12},(_,i)=>i+1));
@@ -140,7 +146,7 @@ test('start requires display acknowledgement; double touch and command retries a
     const displayId=uid(),touchId=uid(),cueId=f.state.cueId,shown=f.state.generation;
     await f.event('cue_displayed',{id:displayId,cueId,monotonicMs:100});
     const touch={id:touchId,cueId,displayEventId:displayId,generation:shown,reactionMs:432};
-    assert.equal((await f.event('touch',touch)).status,200);await f.refresh();assert.equal(f.state.icon,'listening');
+    assert.equal((await f.event('touch',touch)).status,200);await f.refresh();assert.equal(f.state.icon,'thinking');
     await f.event('touch',touch);await f.event('touch',{...touch,id:uid()});
     const e=await f.call(f.path('export?format=json'),{auth:f.admin});const touches=e.result.events.filter(e=>e.type==='cue_touch');
     assert.equal(touches.length,2);assert.equal(touches.filter(e=>e.payload.accepted).length,1);
@@ -148,15 +154,15 @@ test('start requires display acknowledgement; double touch and command retries a
     await f.command('set_icon',{icon:'thinking'});assert.equal(f.state.icon,'thinking');await f.command('set_icon',{icon:'speaking'});assert.equal(f.state.icon,'speaking');
   }finally{f.close();}
 });
-test('page re-entry hides Cue and old-page events cannot revive it',async()=>{
+test('page re-entry returns to Idle and old-page events cannot revive Twinkle',async()=>{
   const f=await fixture();try{
     await f.start();await f.command('show_cue');const old={generation:f.state.generation,cueId:f.state.cueId,trialId:f.state.trial.id};const displayId=uid();
     await f.event('cue_displayed',{id:displayId,cueId:old.cueId,monotonicMs:100});
     const newPage=uid();const rejoin=await f.call(f.path('rejoin'),{auth:f.device,role:'device',data:{id:uid(),pageId:newPage,reason:'reload'}});assert.equal(rejoin.status,200);
-    await f.refresh();assert.equal(f.state.icon,'hidden');assert.equal(f.state.suspended,true);
+    await f.refresh();assert.equal(f.state.icon,'idle');assert.equal(f.state.suspended,true);
     await f.event('touch',{...old,displayEventId:displayId,reactionMs:500});await f.refresh();assert.equal(f.state.touched,false);
-    await f.command('resume');assert.equal(f.state.icon,'hidden');assert.equal(f.state.suspended,false);
-    f.setPageId(newPage);await f.command('abort');await f.start('coworker','reactive');assert.equal(f.state.icon,'hidden');assert.equal(f.state.cueId,null);
+    await f.command('resume');assert.equal(f.state.icon,'idle');assert.equal(f.state.suspended,false);
+    f.setPageId(newPage);await f.command('abort');await f.start('coworker','reactive');assert.equal(f.state.icon,'idle');assert.equal(f.state.cueId,null);
   }finally{f.close();}
 });
 test('private owner, origin, role, single device and code expiry are enforced',async()=>{
@@ -226,5 +232,63 @@ test('audio claims are once per trial; authenticated logs are idempotent and rem
     assert.equal(data.result.events.filter(e=>e.type==='begin_audio').length,1);assert.equal(data.result.events.filter(e=>e.type==='operator_confirm').length,1);
     assert.equal(data.result.events.find(e=>e.type==='operator_confirm').trial_id,trialId);
     await f.start('friend','reactive');assert.equal(f.state.audioRun,null);
+  }finally{f.close();}
+});
+
+
+test('all four audio flows apply visible states before clips, consume valid touch once and return Idle',async()=>{
+  for(const intervention of INTERVENTIONS){
+    const f=await fixture();try{
+      await f.start('friend',intervention);
+      const states=[],clips=[],waits=[],events=[];
+      let flow;
+      const sync=async()=>flow.update(await f.refresh(),true,true);
+      const command=async(action,data)=>{
+        const r=await f.command(action,data);assert.equal(r.status,200,JSON.stringify(r.result));
+        states.push(f.state.icon);await f.apply();await sync();return f.refresh();
+      };
+      flow=new AudioFlow({claim:async run=>{
+        const r=await f.command('begin_audio',{pageId:run.pageId,delayMs:run.delayMs,assets:Object.fromEntries(Object.entries(run.assets).map(([k,a])=>[k,a.meta]))},run.id);
+        assert.equal(r.status,200);await sync();
+      },command,play:async(asset,started)=>{
+        const view=await f.refresh();assert.equal(view.applied,true);
+        const expected=asset.meta.name==='dialogue'?(intervention==='reactive'?'idle':'listening'):'speaking';
+        assert.equal(f.state.icon,expected);clips.push(asset.meta.name);await started();
+      },stop(){},log:async type=>events.push(type),changed(){},wait:async ms=>waits.push(ms)});
+      await sync();const assets=Object.fromEntries(['dialogue','prompt','answer'].map(k=>[k,{meta:{name:k,duration:1,sha256:'a'.repeat(64)}}]));
+      assert.equal(await flow.begin({trial:f.state.trial,assets,delayMs:1000,pageId:uid()}),true);
+      if(['reactive','cue'].includes(intervention)){
+        assert.equal(f.state.touchReady,true);assert.equal(flow.canConfirm,false);
+        const id=uid(),shown={cueId:f.state.cueId,generation:f.state.generation};
+        await f.event(intervention==='cue'?'cue_displayed':'reactive_ready',{id,...shown,monotonicMs:100});
+        const touch={...shown,displayEventId:id,reactionMs:200};
+        assert.equal((await f.event('touch',touch)).status,200);await f.refresh();
+        assert.equal(f.state.icon,intervention==='reactive'?'listening':'thinking');assert.equal(f.state.touchReady,false);
+        await f.event('touch',{...touch,id:uid()});await sync();
+      }
+      if(['reactive','suggestion'].includes(intervention)){assert.equal(flow.canConfirm,true);await flow.confirm('button');}
+      for(let i=0;i<100&&flow.active;i++)await tick();
+      assert.equal(flow.phase,'complete');assert.equal(f.state.icon,'idle');assert.equal(f.state.audioRun.status,'complete');
+      assert.deepEqual(clips,intervention==='suggestion'?['dialogue','prompt','answer']:['dialogue','answer']);
+      assert.deepEqual(waits,intervention==='suggestion'?[1000,1000]:[1000]);
+      assert.deepEqual(states,({reactive:['idle','idle','thinking','speaking','idle'],cue:['listening','twinkle','thinking','speaking','idle'],suggestion:['listening','thinking','speaking','listening','thinking','speaking','idle'],direct:['listening','thinking','speaking','idle']})[intervention]);
+      assert.equal(events.filter(x=>x==='audio_flow_complete').length,1);
+      const exported=(await f.call(f.path('export?format=json'),{auth:f.admin})).result;
+      assert.equal(exported.events.filter(e=>['cue_touch','reactive_touch'].includes(e.type)&&e.payload.accepted).length,['reactive','cue'].includes(intervention)?1:0);
+    }finally{f.close();}
+  }
+});
+
+test('stopped and superseded runs reject late visual commands; disconnected stop still restores Idle',async()=>{
+  const f=await fixture();try{
+    await f.start('friend','direct');const runId=uid(),trialId=f.state.trial.id,asset={name:'x',duration:1,sha256:'a'.repeat(64)};
+    await f.command('begin_audio',{pageId:uid(),delayMs:1000,assets:{dialogue:asset,answer:asset}},runId);
+    assert.equal((await f.command('set_icon',{icon:'speaking'})).status,409);
+    assert.equal((await f.command('set_icon',{icon:'speaking',runId,trialId})).status,200);
+    await f.DB.prepare('UPDATE sessions SET device_seen=0 WHERE id=?').bind(f.admin.id).run();
+    assert.equal((await f.command('stop_audio',{runId,trialId})).status,200);assert.equal(f.state.icon,'idle');
+    await f.call(f.path('state?pageId='+f.pageId),{auth:f.device,role:'device'});assert.equal((await f.command('set_icon',{icon:'speaking',runId,trialId})).status,409);
+    await f.command('abort');await f.start('friend','reactive');
+    assert.equal((await f.command('stop_audio',{runId,trialId})).status,409);assert.equal(f.state.icon,'idle');assert.equal(f.state.audioRun,null);
   }finally{f.close();}
 });

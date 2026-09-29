@@ -6,7 +6,7 @@ export function initializeAiWidget({onTouch = () => {}} = {}) {
   const panel = document.getElementById('ai-panel');
   const label = document.getElementById('ai-state-label');
   const choices = [...panel.querySelectorAll('[data-ai-state]')];
-  const labels = {idle: '대기', listening: '듣는 중', thinking: '생각 중', speaking: '말하는 중'};
+  const labels = {idle: '대기', twinkle: '정보 제공 가능', listening: '듣는 중', thinking: '생각 중', speaking: '말하는 중'};
 
   function close(restoreFocus = false) {
     panel.hidden = true;
@@ -55,10 +55,11 @@ export function initializeAiWidget({onTouch = () => {}} = {}) {
       else{toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-controls','ai-panel');}
       toggle.setAttribute('aria-label',value?'AI 탐색 요청':`AI ${labels[widget.dataset.state]} · 상태 미리보기`);
     },
-    setVisible(value) { widget.hidden=!value; },
+    setVisible() { widget.hidden=false; },
+    setTouchEnabled(value) { toggle.disabled=!value;toggle.setAttribute('aria-disabled',String(!value)); },
     setState(state) {
       widget.dataset.state=state;label.textContent=labels[state];
-      toggle.setAttribute('aria-label',experiment?'AI 탐색 요청':`AI ${labels[state]} · 상태 미리보기`);
+      toggle.setAttribute('aria-label',experiment?`AI ${labels[state]}${state==='twinkle'?' · 터치하여 정보 받기':''}`:`AI ${labels[state]} · 상태 미리보기`);
       for (const choice of choices) choice.setAttribute('aria-pressed',String(choice.dataset.aiState===state));
     }
   };

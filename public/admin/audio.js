@@ -83,7 +83,7 @@ export function initAudio({getAuth,getSnapshot,command,refresh}){
     finally{preparing=false;render();}
   };
   $('audio-confirm').onclick=()=>void flow.confirm('button');
-  $('audio-stop').onclick=()=>{flow.cancel();if(getSnapshot()?.state.trial?.intervention==='cue')void command('set_icon',{icon:'hidden'});};
+  $('audio-stop').onclick=()=>flow.cancel();
   document.addEventListener('keydown',event=>{if(flow.canConfirm&&acceptsSpace(event)){event.preventDefault();void flow.confirm('Space');}});
   window.addEventListener('pagehide',()=>flow.cancel('진행자 화면을 나가 재생을 멈췄습니다.'));
   function changedCondition(){
@@ -95,5 +95,5 @@ export function initAudio({getAuth,getSnapshot,command,refresh}){
   }
   for(const id of ['relationship','intervention','scenario'])$(id).addEventListener('change',changedCondition);
   changedCondition();void flush();setInterval(flush,1000);
-  return {update(snapshot,connected,ready=connected,diagnostics={}){flow.update(snapshot,connected,ready,diagnostics);render();},get active(){return flow.active;},cancel:reason=>flow.cancel(reason)};
+  return {update(snapshot,connected,ready=connected,diagnostics={}){flow.update(snapshot,connected,ready,diagnostics);render();},get active(){return flow.active;},cancel:reason=>flow.cancel(reason,{},false)};
 }

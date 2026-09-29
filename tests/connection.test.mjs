@@ -18,7 +18,7 @@ test('participant heartbeat progresses while an event upload remains unresolved'
   const elements=new Map(),timers=[],queue=[],requests=[];let release,clock=100;
   const snapshot={state:{mode:'setup',generation:1,trial:null,suspended:false},adminConnected:true,adminAlive:true};
   const context={initializeAiWidget:()=>({setMode(){},setVisible(){},setState(){}}),singleFlight,WARN_MS,LOST_MS,
-    crypto:globalThis.crypto,performance:{now:()=>clock},Date,console,
+    crypto:globalThis.crypto,performance:{now:()=>clock},Date,console,requestAnimationFrame:f=>f(),
     document:{hidden:false,addEventListener(){},getElementById(id){if(!elements.has(id))elements.set(id,{});return elements.get(id);}},
     load:key=>key==='coast.device.v2'?{id:'s',token:'t'}:false,save(){},localStorage:{removeItem(){}},endpoint:(_,op)=>op,
     Outbox:class{db=Promise.resolve();async put(e){queue.push(e);}async all(){return [...queue];}async remove(id){queue.splice(queue.findIndex(e=>e.id===id),1);}},
@@ -32,7 +32,7 @@ test('participant heartbeat progresses while an event upload remains unresolved'
 test('touch upload acknowledgement cannot re-arm a Cue while a concurrent state response is stale',async()=>{
   const source=fs.readFileSync(new URL('../public/experiment.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'').replace('export function','function');
   const elements=new Map(),timers=[],queue=[],sent=[],states=[];let onTouch;
-  const snapshot={state:{mode:'experiment',generation:1,trial:{id:'trial',status:'running',intervention:'cue'},icon:'idle',cueId:'cue',touched:false,suspended:false},adminConnected:true,adminAlive:true};
+  const snapshot={state:{mode:'experiment',generation:1,trial:{id:'trial',status:'running',intervention:'cue'},icon:'twinkle',cueId:'cue',touchReady:true,touched:false,suspended:false},adminConnected:true,adminAlive:true};
   const context={initializeAiWidget:options=>{onTouch=options.onTouch;return {setMode(){},setVisible(){},setState(s){states.push(s);}};},singleFlight,WARN_MS,LOST_MS,
     crypto:globalThis.crypto,performance:{now:()=>100},Date,console,requestAnimationFrame:f=>f(),
     document:{hidden:false,addEventListener(){},getElementById(id){if(!elements.has(id))elements.set(id,{});return elements.get(id);}},
@@ -42,7 +42,7 @@ test('touch upload acknowledgement cannot re-arm a Cue while a concurrent state 
   vm.createContext(context);vm.runInContext(source+'\ninitializeExperiment({reset(){}});',context);await tick();
   await onTouch();await timers.shift()();await tick();assert.equal(sent.filter(e=>e.type==='touch').length,1);
   await timers.shift()();await tick();await onTouch();await timers.shift()();await tick();
-  assert.equal(sent.filter(e=>e.type==='touch').length,1);assert.equal(states.at(-1),'listening');
+  assert.equal(sent.filter(e=>e.type==='touch').length,1);assert.equal(states.at(-1),'thinking');
   snapshot.state={...snapshot.state,generation:2,touched:true,icon:'thinking'};
   await timers.shift()();await tick();assert.equal(states.at(-1),'thinking');
 });

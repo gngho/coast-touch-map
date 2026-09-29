@@ -12,6 +12,16 @@
 .ai-widget[data-state="thinking"] .ai-ring{opacity:.38;border-color:#4285f426;border-top-color:#4285f4;border-right-color:#8b5cf6;animation:ai-thinking 2.4s linear infinite}
 .ai-widget[data-state="speaking"] .ai-symbol{animation:ai-speaking 1.6s ease-in-out infinite}
 .ai-widget[data-state="speaking"] .ai-ring{animation:ai-speaking-ring 1.6s ease-in-out infinite}
+.ai-toggle:disabled{opacity:1;cursor:default}
+.ai-sparkles{display:none;position:absolute;right:0;top:3px;color:#8261ed;font-size:25px;pointer-events:none;text-shadow:0 0 10px #a18aff88}
+.ai-sparkles::after{content:'✦';position:absolute;right:73px;top:56px;font-size:16px;color:#4285f4}
+.ai-offer{display:none;position:absolute;left:106px;bottom:34px;white-space:nowrap;padding:10px 14px;background:#fffffff5;border:1px solid #d8d1fc;border-radius:16px;color:#554598;font-size:14px;font-weight:600;box-shadow:0 4px 18px #6655aa15;pointer-events:none}
+.ai-widget[data-state="twinkle"] .ai-symbol{animation:ai-twinkle 2.2s ease-in-out infinite;filter:drop-shadow(0 0 9px #8c6ff077)}
+.ai-widget[data-state="twinkle"] .ai-sparkles{display:block;animation:ai-sparkle 2.2s ease-in-out infinite}
+.ai-widget[data-state="twinkle"][data-mode="experiment"] .ai-offer{display:block}
+@keyframes ai-twinkle{0%,100%{transform:scale(1);opacity:.9}35%{transform:scale(1.13) rotate(8deg);opacity:1}65%{transform:scale(1.03) rotate(-5deg);opacity:.95}}
+@keyframes ai-sparkle{0%,100%{transform:scale(.8);opacity:.45}40%{transform:scale(1.15);opacity:1}70%{transform:scale(.95);opacity:.7}}
+@media(prefers-reduced-motion:reduce){.ai-sparkles{animation:none!important}}
 .ai-panel{position:absolute;left:calc(100% + 8px);bottom:0;width:280px;max-height:calc(100dvh - 280px);overflow:auto;overscroll-behavior:contain;padding:16px;border:1px solid #e5ebf2;border-radius:22px;background:#fffffff5;box-shadow:0 8px 32px #24334216;touch-action:pan-y}
 .ai-panel[hidden]{display:none}
 .ai-panel-heading{display:flex;align-items:center;justify-content:space-between;margin:-8px -8px 8px 0;gap:8px}

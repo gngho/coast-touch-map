@@ -33,3 +33,11 @@ test('Korean exports preserve provenance and escape user strings; session and af
   assert.doesNotMatch(timelineHtml(input),/iPad 화면 적용 확인/);assert.match(timelineHtml(input,'',true),/iPad 화면 적용 확인/);
   assert.equal(kst(1790493937258),'2026-09-27 16:25:37.258');assert.equal(kst('null'),'');
 });
+
+
+test('Reactive touch uses its own linked display metric and never becomes Cue reaction time',()=>{
+  const input={trials:[trial('reactive')],events:[e('ready','reactive_ready',{cueId:'r'},{page_id:'ipad'}),e('touch','reactive_touch',{cueId:'r',displayEventId:'ready',accepted:true,reactionMs:750},{page_id:'ipad'})]};
+  assert.equal(summarize(input)[0].reactiveMs,750);assert.equal(summarize(input)[0].cueMs,null);
+  assert.equal(summaryRows(input)[0]['Reactive 터치 준비→첫 터치 (초·iPad)'],.75);
+  input.events[1].payload.accepted=false;assert.equal(summarize(input)[0].reactiveMs,null);
+});

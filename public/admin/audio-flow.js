@@ -15,6 +15,9 @@ export class AudioFlow {
       this.cancel(reason,{cause,...diagnostics});return;
     }
     if(this.active&&this.claimed&&wasReady!==undefined&&wasReady!==ready)void this.emit(ready?'audio_connection_restored':'audio_connection_delayed',diagnostics).catch(()=>{});
+    if(this.phase==='reactive_wait'&&snapshot?.state.touched){
+      this.set('response_wait','참가자의 음성 요청이 끝나면 Space 또는 응답 확인을 누르세요.');
+    }
     if(this.phase==='cue_wait'&&snapshot?.state.touched){
       const epoch=this.epoch;this.set('delay','Cue 터치 확인 · 응답 준비');
       void this.answer(epoch).catch(e=>this.fail(e,epoch));
@@ -25,17 +28,38 @@ export class AudioFlow {
     while(this.valid(epoch)&&!this.ready)await this.wait(100);
     return this.valid(epoch);
   }
-  async control(action,data,epoch){if(await this.awaitReady(epoch))await this.command(action,data);}
+  async control(action,data,epoch){
+    if(!await this.awaitReady(epoch))return;
+    const result=await this.command(action,{...data,runId:this.run.id,trialId:this.run.trialId});
+    if(!result?.state)return; // Unit adapters may apply synchronously.
+    const generation=result.state.generation,deadline=performance.now()+10000;
+    while(this.valid(epoch)){
+      const s=this.snapshot?.state;
+      // A fast valid touch can consume the just-armed state before its ACK poll.
+      if(['show_cue','arm_reactive'].includes(action)&&s?.cueId===result.state.cueId&&s.touched)return;
+      if(s?.generation===generation&&this.snapshot.applied)return;
+      if(s?.generation>generation)throw Error('화면 상태가 변경되어 재생을 중지했습니다.');
+      if(performance.now()>deadline)throw Error('iPad 화면 적용을 10초 안에 확인하지 못했습니다.');
+      await this.wait(100);
+    }
+  }
+  async icon(icon,epoch){await this.control('set_icon',{icon},epoch);}
   async emit(type,detail={}){if(this.claimed)await this.log(type,detail,this.run);}
   async begin({trial,assets,delayMs,pageId}){
     if(this.active||this.snapshot?.state.audioRun||!this.ready||this.snapshot?.state.suspended||trial?.status!=='running')return false;
     const epoch=++this.epoch;this.claimed=false;
     this.run={id:crypto.randomUUID(),trialId:trial.id,intervention:trial.intervention,pageId,assets,delayMs};
+    const run=this.run;
     this.set('claiming','재생 준비 중');
     try{
-      await this.claim(this.run);
+      await this.claim(run);
+      if(!this.valid(epoch)){
+        this.resetIcon(run,true);
+        await this.log('audio_flow_stopped',{reason:'재생 시작 확인 전에 흐름이 취소되었습니다.'},run);return false;
+      }
       this.claimed=true;
-      if(!this.valid(epoch)){await this.emit('audio_flow_stopped',{reason:'재생 시작 확인 전에 흐름이 취소되었습니다.'});return false;}
+      await this.icon(trial.intervention==='reactive'?'idle':'listening',epoch);
+      if(!this.valid(epoch))return false;
       await this.clip('dialogue',epoch);
       if(!this.valid(epoch))return false;
       if(trial.intervention==='cue'){
@@ -43,11 +67,16 @@ export class AudioFlow {
         if(this.valid(epoch)){this.set('cue_wait','iPad의 Cue 터치를 기다립니다.');this.update(this.snapshot,this.connected,this.ready,this.diagnostics);}
       }else if(trial.intervention==='suggestion'){
         this.set('delay','대화 종료 · AI 제안 대기');
+        await this.icon('thinking',epoch);if(!this.valid(epoch))return false;
         await this.wait(this.run.delayMs);if(!this.valid(epoch))return false;
+        await this.icon('speaking',epoch);if(!this.valid(epoch))return false;
         await this.clip('prompt',epoch);
+        if(!this.valid(epoch))return false;
+        await this.icon('listening',epoch);
         if(this.valid(epoch))this.set('response_wait','참가자의 승인 발화를 확인한 뒤 Space를 누르세요.');
       }else if(trial.intervention==='reactive'){
-        this.set('response_wait','참가자의 호출 발화를 확인한 뒤 Space를 누르세요.');
+        await this.control('arm_reactive',undefined,epoch);
+        if(this.valid(epoch)){this.set('reactive_wait','iPad 아이콘 터치를 기다립니다. 터치 후 참가자가 음성으로 요청합니다.');this.update(this.snapshot,this.connected,this.ready,this.diagnostics);}
       }else{
         this.set('delay','대화 종료 · 응답 준비');await this.answer(epoch);
       }
@@ -70,28 +99,30 @@ export class AudioFlow {
     if(this.valid(epoch))await this.emit('audio_ended',{clip:kind,clock:'pc_audio_ended_callback'});
   }
   async answer(epoch){
-    const cue=this.run.intervention==='cue',delay=this.run.delayMs;
-    if(cue){
-      await this.wait(Math.min(300,delay));if(!this.valid(epoch))return;
-      await this.control('set_icon',{icon:'thinking'},epoch);if(!this.valid(epoch))return;
-      await this.wait(Math.max(0,delay-300));
-    }else await this.wait(delay);
+    await this.icon('thinking',epoch);if(!this.valid(epoch))return;
+    await this.wait(this.run.delayMs);
     if(!this.valid(epoch))return;
-    if(cue){await this.control('set_icon',{icon:'speaking'},epoch);if(!this.valid(epoch))return;}
+    await this.icon('speaking',epoch);if(!this.valid(epoch))return;
     await this.clip('answer',epoch);if(!this.valid(epoch))return;
-    if(cue){await this.control('set_icon',{icon:'hidden'},epoch);if(!this.valid(epoch))return;}
+    await this.control('finish_audio',undefined,epoch);if(!this.valid(epoch))return;
     await this.emit('audio_flow_complete');
     if(this.valid(epoch))this.set('complete','답변 재생 완료 · 시행 종료는 진행자가 선택하세요.');
   }
-  cancel(reason='진행자가 자동 재생을 멈췄습니다.',diagnostics={}){
+  cancel(reason='진행자가 자동 재생을 멈췄습니다.',diagnostics={},reset=true){
     if(!this.active)return;
     ++this.epoch;this.stop();this.set('stopped',reason+' 재실행은 새 시행으로 준비하세요.');
+    if(reset)this.resetIcon();
     void this.emit('audio_flow_stopped',{reason,...diagnostics}).catch(()=>{this.message+=' 재생 로그 저장을 확인해 주세요.';this.changed();});
   }
   fail(error,epoch){
     if(!this.valid(epoch))return;
     ++this.epoch;this.stop();this.set('error',(error.message||'음원을 재생하지 못했습니다.')+' 재실행은 새 시행으로 준비하세요.');
+    this.resetIcon();
     void this.emit('audio_flow_error',{message:String(error.message||error).slice(0,1000)}).catch(()=>{});
+  }
+  resetIcon(run=this.run,claimed=this.claimed){
+    if(!claimed||this.snapshot?.state.suspended||this.snapshot?.state.audioRun?.status==='stopped'||this.snapshot?.state.trial?.id!==run?.trialId||this.snapshot.state.trial.status!=='running')return;
+    void this.command('stop_audio',{runId:run.id,trialId:run.trialId}).catch(()=>{});
   }
 }
 

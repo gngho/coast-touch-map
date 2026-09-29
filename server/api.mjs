@@ -42,7 +42,7 @@ async function commit(db,row,eventId,action,data,actor,extra={}){
     if(actor==='device'&&action==='touch'&&Number.isInteger(extra.generation)&&extra.generation<(before.resetGeneration||0))return row;
     if(actor==='admin'){
       requireThat(data.baseGeneration===before.generation,'다른 변경이 반영되었습니다. 현재 상태를 확인한 뒤 다시 눌러 주세요.',409);
-      if(!['abort','note','unpair','reset_records','create_schedule'].includes(action))requireThat(row.device_hash&&stamp-row.device_seen<WARN_MS,'iPad 연결을 확인해 주세요.',409);
+      if(!['abort','note','unpair','reset_records','create_schedule','stop_audio'].includes(action))requireThat(row.device_hash&&stamp-row.device_seen<WARN_MS,'iPad 연결을 확인해 주세요.',409);
     }
     if(action==='prepare'&&data.schedule)data=await scheduledPreparation(db,row,data);
     const {state,event}=transition(before,action,data,{now:stamp,newId:crypto.randomUUID(),applied:row.applied_generation===before.generation&&row.applied_trial===before.trial?.id});
@@ -121,7 +121,7 @@ export async function api(request,env){
     }
     if(operation==='command'&&post){
       requireThat(role==='admin','진행자만 화면을 제어할 수 있습니다.',403);
-      requireThat(['prepare','start','end','abort','setup','show_cue','set_icon','resume','note','unpair','begin_audio','reset_records','create_schedule'].includes(data.action),'잘못된 조작입니다.');
+      requireThat(['prepare','start','end','abort','setup','show_cue','arm_reactive','set_icon','finish_audio','stop_audio','resume','note','unpair','begin_audio','reset_records','create_schedule'].includes(data.action),'잘못된 조작입니다.');
       row=await commit(db,row,data.id,data.action,data,'admin');
       if(data.action==='unpair'){
         await query(db,'UPDATE sessions SET device_hash=NULL,page_id=NULL,device_seen=0,applied_generation=-1 WHERE id=?',id).run();
@@ -153,7 +153,7 @@ export async function api(request,env){
     }
     if(operation==='event'&&post){
       requireThat(role==='device'&&validId(data.id)&&validId(data.pageId),'이벤트를 확인해 주세요.',403);
-      requireThat(['applied','cue_displayed','touch','connection_lost','visibility_hidden'].includes(data.type),'지원하지 않는 이벤트입니다.');
+      requireThat(['applied','cue_displayed','reactive_ready','touch','connection_lost','visibility_hidden'].includes(data.type),'지원하지 않는 이벤트입니다.');
       requireThat(Number.isInteger(data.generation)&&data.generation>=0,'화면 버전을 확인해 주세요.');
       const resetGeneration=rowState(await first(db,'SELECT * FROM sessions WHERE id=?',id)).resetGeneration||0;
       if(data.generation<resetGeneration)return json({saved:true,discarded:true});
@@ -164,11 +164,11 @@ export async function api(request,env){
       }
       if(data.type==='touch'){
         requireThat(Number.isFinite(data.reactionMs)&&data.reactionMs>=0&&data.reactionMs<86400000&&validId(data.cueId)&&validId(data.displayEventId),'터치 시점을 확인해 주세요.');
-        const display=await first(db,"SELECT * FROM events WHERE id=? AND session_id=? AND trial_id=? AND type='cue_displayed' AND page_id=? AND generation=?",data.displayEventId,id,data.trialId,data.pageId,data.generation);
+        const display=await first(db,"SELECT * FROM events WHERE id=? AND session_id=? AND trial_id=? AND type IN ('cue_displayed','reactive_ready') AND page_id=? AND generation=?",data.displayEventId,id,data.trialId,data.pageId,data.generation);
         if(!display&&await wasReset(db,id,data.generation))return json({saved:true,discarded:true});
-        requireThat(display&&JSON.parse(display.payload).cueId===data.cueId,'Cue 표시 기록을 먼저 저장해 주세요.',409);
+        requireThat(display&&JSON.parse(display.payload).cueId===data.cueId,'터치 준비 기록을 먼저 저장해 주세요.',409);
         // A queued event from an older page is retained but can never change the live state.
-        const touchData=data.pageId===row.page_id?data:{...data,generation:-1};
+        const touchData={...data,touchKind:display.type,...(data.pageId===row.page_id?{}:{generation:-1})};
         return json(view(await commit(db,row,data.id,'touch',touchData,'device',data)));
       }
       await query(db,"INSERT OR IGNORE INTO events (id,session_id,trial_id,type,actor,server_time,client_time,page_id,generation,payload) SELECT ?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM sessions WHERE id=? AND COALESCE(json_extract(state,'$.resetGeneration'),0)<=?)",data.id,id,data.trialId||null,data.type,'device',now(),String(data.clientTime||'').slice(0,40),data.pageId,data.generation,JSON.stringify({cueId:data.cueId||null,monotonicMs:data.monotonicMs??null,...(['connection_lost','visibility_hidden'].includes(data.type)?{diagnostics:diagnostics(data.diagnostics)}:{})}),id,data.generation).run();

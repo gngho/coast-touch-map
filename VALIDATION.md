@@ -85,3 +85,11 @@ Direct의 대화 종료 후 무입력 답변, 진행자 새로고침 후 기존 
 - 참가자 `/`와 관리자 `/admin`의 미인증 요청이 Access 로그인으로 이동하는 것을 확인. 공개 JWKS endpoint HTTP 200 확인.
 - `e22743a` main push로 GitHub CI 및 Cloudflare Workers Builds가 자동 실행되어 모두 성공. 배포 버전 `7f257b4b-f3ff-4de9-8efd-6a901cc9e927`에 실제 트래픽 100% 적용 및 서버 인증 설정 반영 확인.
 - 실제 계정의 로그인 후 화면, PC–iPad 연결 및 현장 실험은 별도 확인 필요. 위 자동 배포 성공이 현장 파일럿 완료를 의미하지 않음.
+
+## 2.4.0 상시 AI 상태·Twinkle·음원 흐름 (2026-09-29)
+
+- 자동 테스트 47개 통과. 12조건 공통 상태, Reactive 터치 후 Listening과 진행자 확인, Cue Twinkle 후 Thinking, Suggestion 두 차례 Thinking/Speaking, Direct 자동 답변, 완료·정지 후 Idle을 검증.
+- 실제 API/SQLite와 AudioFlow 통합으로 네 조건의 상태·클립 순서, 적용 ACK, 중복 터치 수락 방지, 중단/이전 재생 명령 차단, 연결 끊김 중 정지, 늦게 완료된 재생 시작 요청의 시행 격리를 검증. Reactive 터치 시간과 Cue 반응시간을 분리.
+- 로컬 Chrome headless에서 서로 다른 관리자/참가자 브라우저 컨텍스트를 연결하고 합성 WAV를 Web Audio로 재생. 참가자 뷰포트 1194×834, 터치 입력으로 네 조건 전체 흐름 확인. Reactive/Cue/Direct 각 2클립, Suggestion 3클립, 각 클립 시작 전 기대 아이콘 상태, 계속 표시됨, 마지막 Idle, JavaScript 페이지 오류 0건 확인. Twinkle 안내 문구의 가독성과 화면 내 배치 확인.
+- Cloudflare dry-run 및 기존 Sites 번들 빌드 통과. 테스트 자료는 로컬 DB에만 저장하며 운영 실험 기록을 변경하지 않음.
+- 실제 iPad Safari, 실제 음원·참가자 발화, HDMI/TV 음향 지연, 장시간 파일럿은 이 데스크톱 검증에 포함하지 않음. 업데이트 후 두 기기 새로고침 필요.
