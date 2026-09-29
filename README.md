@@ -1,80 +1,90 @@
-# Coast 2.1 — PC 음원 자동 진행
+# Coast — 차량 AI 상호작용 실험
 
-/admin에서 로컬 TTS 음원을 선택하여 재생합니다. Reactive·Suggestion은 진행자 Space/버튼, Cue는 iPad 첫 터치, Direct는 초반 대화 종료로 다음 단계에 진입합니다. 음원은 PC에서만 재생하고 서버에 업로드하지 않습니다. 마이크·음성 인식은 없습니다. Web Audio 시작 호출·종료 콜백 및 진행자 확인을 서버 이벤트로 기록하며 실제 발화/TV 소리 시점과 구분합니다.
+iPad 참가자용 내비게이션 자극과 PC 진행자용 관리자 화면을 포함한 연구용 웹앱입니다. 현재 화면·서버 버전은 **2.3.2**입니다. package.json의 2.0.0은 초기 패키지 버전입니다.
 
-현재 사용법은 OPERATING.md, 검증 범위는 VALIDATION.md를 참고하세요. 아래는 이전 제작 단계의 기록입니다.
+## 포함된 기능
 
-# Coast · 캘리포니아 해안
+- 참가자 `/`: 실제 해안 지도, 터치 이동·확대, 고정 경로·방향 화살표, AI 상태별 애니메이션.
+- 진행자 `/admin`: 연결 코드, 12조건 선택, 시행 준비·시작·종료·중단, Cue·화면 상태 제어.
+- PC 로컬 음원 재생 및 참가자 터치/진행자 확인에 따른 후속 재생.
+- Williams 라틴스퀘어 조건 순서와 식당·박물관 사례 배정.
+- 시행·이벤트 저장, 한국어 로그 요약, CSV·JSON 내보내기, 확인 후 기록 초기화.
+- Sites Worker API, D1 스키마·마이그레이션, 로컬 SQLite 서버, 회귀 테스트.
 
-## 2.0 연구 실험용 확장
+실제 AI, 음성 인식·녹음, GPS 추적, Slow Roads 연동은 없습니다. Slow Roads는 별도로 TV에 표시하며 지도 경로와 화살표는 고정된 시각 자극입니다.
 
-현재 버전은 참가자용 `/`와 진행자용 `/admin`, Sites Worker API 및 D1 저장소를 포함합니다. 12조건 선택, 단일 iPad 연결, Cue 제시·터치, 수동 애니메이션 제어, 시행·이벤트 로그와 CSV/JSON 내보내기를 지원합니다. 음성은 별도 프로그램에서 진행자가 재생합니다. 상세 운영은 [OPERATING.md](OPERATING.md), 검증 범위는 [VALIDATION.md](VALIDATION.md)를 참고하세요.
+## 다른 PC에서 실행
 
-로컬 개발은 Node.js 24 이상에서 `npm ci`, `node server.mjs`로 실행합니다. http://127.0.0.1:4173/admin 과 http://127.0.0.1:4173/ 을 사용합니다. 로컬 프리뷰는 loopback에만 바인딩하고 테스트 소유자 계정을 사용합니다. 운영 Worker에는 이 인증 우회가 포함되지 않습니다. 테스트 데이터는 무시된 `.sites-runtime/coast.sqlite`에만 저장되어 배포에 포함되지 않습니다.
+Node.js **24 이상**, npm, Git이 필요합니다. 저장소를 복제한 폴더에서 실행합니다.
 
-`node --test tests/*.test.mjs`로 검증하고 `node build.mjs`로 Worker와 UI·마이그레이션을 생성합니다. 변경된 스키마는 `npm run db:generate`로 새 마이그레이션을 생성합니다. 이미 배포된 마이그레이션은 수정하지 않습니다. `.openai/hosting.json`의 기존 project_id와 비공개 접근 정책을 유지합니다.
+```sh
+npm ci
+npm test
+npm run build
+npm start
+```
 
-아래는 1차 지도 제작 기록입니다.
+- 참가자: http://127.0.0.1:4173/
+- 진행자: http://127.0.0.1:4173/admin
+- 종료: 실행한 터미널에서 Ctrl+C.
 
-iPad Air 11형(M3)을 위한 Pleos 스타일의 지도 중심 터치 화면입니다. 실제 캘리포니아 빅서 해안 지도를 표시합니다.
+로컬 서버는 `127.0.0.1`에만 바인딩하며 한 PC의 두 브라우저 탭으로 기능을 확인하는 용도입니다. iPad에서는 이 주소에 접속할 수 없습니다. 로컬 API는 테스트 소유자 계정을 사용하므로 외부 공개 서버로 실행하지 마세요. 개발 DB는 `.sites-runtime/coast.sqlite`에 생성되며 Git에서 제외됩니다.
 
-## 사용
+실제 PC–iPad 실험은 기존 비공개 HTTPS Site를 사용합니다.
 
-배포 주소를 iPad Safari에서 열고 Sites 소유 계정으로 로그인합니다. 공유 메뉴의 **홈 화면에 추가**를 선택하고 **웹 앱으로 열기**가 보이면 켭니다. 홈 화면의 Coast 아이콘을 눌러 사용합니다. 가로 방향을 기본으로 설계했으며 세로 방향도 지원합니다.
+- 참가자: https://coast-touch-map.rudgh0862.chatgpt.site/
+- 진행자: https://coast-touch-map.rudgh0862.chatgpt.site/admin
 
-- 한 손가락 드래그: 지도 이동
-- 두 손가락 핀치 또는 +/−: 확대·축소
-- 집 아이콘: 처음 좌표와 배율로 복귀
-- 설정: 지명 표시, 지도 초기화, 출처 확인
-- 지명 표시 선택만 기기에 저장하며 새로 열면 초기 위치로 돌아갑니다.
+## 실험 진행
 
-인터넷 연결이 필요합니다. 자동 이동, 위치 추적, 경로 탐색, 음성 안내, Slow Roads 연동은 포함하지 않습니다. 오프라인일 때는 연결 복구 후 **다시 시도**를 누릅니다.
+1. 관리자에서 연결 코드를 생성하고 iPad 준비 모드 설정에서 입력합니다.
+2. 익명 참가자 ID, 관계, 개입 방식, 시나리오를 선택하거나 저장한 배정표에서 불러옵니다.
+3. 시행 준비 후 iPad 적용 확인을 기다리고 시행 시작을 누릅니다.
+4. PC에서 대화·최종 답변 음원을 선택합니다. Suggestion에는 제안 음원도 필요합니다.
+5. **동승자 대화 재생 · 자동 진행**을 클릭합니다. Space는 초기 재생이 아닌 응답 대기 중 확인 키입니다.
+6. 답변 재생 후 진행자가 시행 종료 또는 중단을 선택합니다. 로그 저장 대기가 0건인지 확인합니다.
 
-## 로컬 실행
+| 조건 | 초반 대화 이후 |
+|---|---|
+| Reactive | 참가자 호출 → 진행자 확인 → 설정 대기 → 답변 |
+| Cue | 아이콘 표시 → 첫 터치 → Listening/Thinking → 답변·Speaking → 숨김 |
+| Suggestion | 설정 대기 → AI 제안 → 참가자 응답 → 진행자 확인 → 설정 대기 → 답변 |
+| Direct | 설정 대기 → 답변 |
 
-Node.js 22 이상에서 프로젝트 디렉터리로 이동하여 `npm start` 또는 `node server.mjs`를 실행하고 http://127.0.0.1:4173 을 엽니다. 로컬 실행에는 의존성 설치나 빌드가 필요하지 않습니다. 배포 파일은 `npm run build`로 dist/에 생성합니다. HTML 파일을 직접 여는 file:// 방식은 지원하지 않습니다.
+실험 중 아이콘은 Cue 조건에서만 나타납니다. 소리는 PC에서 나므로 OS 출력 장치를 TV/HDMI로 지정합니다. 음원은 업로드되지 않으며 새로고침이나 조건 변경 시 다시 선택해야 합니다.
 
-## 구성
+## 코드 구조
 
-- public/index.html / app.css: 한국어 UI, 반응형 레이아웃, 터치 영역, 모달
-- public/app.js: 화면 이벤트와 현지 시계
-- public/map.js: 지도 생성 및 확대·복귀·지명 상태 반영
-- public/state.js: 기기 내 지명 설정 저장
-- public/styles/coast.json: 프로젝트에 저장된 Positron 기반 지도 스타일
-- public/vendor/: MapLibre GL JS 5.21.0 번들과 CSS·라이선스
-- public/icons/ 및 manifest.webmanifest: 홈 화면 아이콘과 standalone 설정
+| 경로 | 역할 |
+|---|---|
+| `public/index.html`, `app.*`, `map.js`, `route*.js` | 참가자 지도·자극 |
+| `public/ai.*`, `experiment.js`, `sync.js`, `connection.js` | AI 상태, 참가자 조작, 동기화 |
+| `public/admin/` | 관리자, 오디오 진행, 배정표, 로그 요약 |
+| `server/api.mjs`, `server/domain.mjs` | 인증·세션·시행 API와 상태 전이 |
+| `server/worker.mjs` | 운영 Worker 진입점 |
+| `server.mjs`, `server/dev-db.mjs` | 로컬 개발 서버·SQLite |
+| `db/`, `drizzle/` | 스키마·마이그레이션 |
+| `public/vendor/`, `styles/`, `icons/` | 번들 지도 라이브러리·스타일·아이콘 |
+| `tests/` | 조건·오디오·연결·배정·로그 회귀 테스트 |
 
-초기 중심은 [-121.901, 36.371], zoom 13, 범위 5–18입니다. 북쪽 위 2D로 고정합니다. 앱과 지도 라이브러리는 자체 배포 파일에 포함되며 타일·글리프·지도 심벌은 OpenFreeMap에서 요청합니다. 사용자 GPS와 센서는 사용하지 않습니다.
+## 배포·데이터·측정 범위
 
-## 검증
+`npm run build`는 `dist/server/index.js`와 Sites 설정·마이그레이션을 생성합니다. `.openai/hosting.json`은 기존 Site의 연결 정보입니다. 해당 Site 권한이 있는 환경에서 Sites 도구로 배포합니다. **GitHub push만으로 운영 사이트가 자동 배포되지는 않습니다.**
 
-Windows Edge에서 1180×820 및 820×1180 CSS px, 터치 에뮬레이션으로 다음을 검증했습니다: 실제 타일 로드, 확대·축소, 드래그, 초기 위치 복귀, 두 손가락 핀치, 북쪽·2D 고정, 모달 뒤 지도 조작 차단, 지명 저장, 재접속 초기 상태, 세로 배치, 출처 표시, 오프라인 및 스타일 로딩 실패 후 재시도. JavaScript 런타임 오류는 없었습니다.
+운영 DB, 로컬 DB, 참가자 로그 내보내기, 선택한 음원, 로그인 정보는 저장소에 포함하지 않습니다. 음원은 별도로 준비합니다. 스키마 변경은 `npm run db:generate`로 새 마이그레이션을 생성하며 이미 배포된 마이그레이션은 수정하지 않습니다.
 
-실제 iPad Safari, 홈 화면 standalone 실행, 실제 기기 회전 및 장시간 성능은 아직 실기기에서 검증하지 않았습니다. 브라우저 에뮬레이션을 실기기 검증으로 간주하지 않습니다.
+Cue 반응시간은 같은 iPad의 표시 적용 기록 → 첫 터치입니다. 진행자 확인 간격은 참가자의 순수 발화 반응시간이 아니며 브라우저 재생 이벤트는 물리적 TV 음향 시작 시각이 아닙니다. 실제 iPad Safari·TV·장시간 실험은 현장 파일럿이 필요합니다.
+
+- [운영 안내](OPERATING.md)
+- [검증 기록](VALIDATION.md)
+- [CLI 인수인계](HANDOFF.md)
+- [이전 단계 제작 기록](docs/README-history.md) — 과거 버전 설명은 현재 동작과 다를 수 있습니다.
 
 ## 출처
 
-- UI 참고: https://document.pleos.ai/docs/connect/guide/docs-design/getting-started/layout
-- MapLibre GL JS 5.21.0: public/vendor/MAPLIBRE-LICENSE.txt
+- Pleos 배치 참고: https://document.pleos.ai/docs/connect/guide/docs-design/getting-started/layout
+- MapLibre: `public/vendor/MAPLIBRE-LICENSE.txt`
 - OpenFreeMap / OpenMapTiles / OpenStreetMap: https://openfreemap.org/
-- Positron 스타일: public/styles/STYLE-LICENSE.md 및 POSITRON-LICENSE.md. 색상과 영어 지명 표현을 수정했습니다.
+- Positron: `public/styles/STYLE-LICENSE.md`, `public/styles/POSITRON-LICENSE.md`
 
-현대자동차 및 Slow Roads의 공식 제품이 아닌 독립 프로젝트입니다.
-
-## 1.1 업데이트
-
-상단의 지역 제목을 제거했습니다. Cabrillo Highway 약 9.5km 구간의 실제 도로 형상을 따라 파란 경로선과 정지된 데모 차량 아이콘을 표시합니다. OSRM에서 얻은 OpenStreetMap 기반 경로를 public/route-data.js에 저장했으며 실행 중에는 경로 서비스에 요청하지 않습니다. 지명 설정은 경로와 차량 표시를 숨기지 않습니다. 실제 GPS나 게임 위치는 아닙니다.
-
-
-## 경로 표시 수정
-
-차량 아이콘을 북쪽 진행 방향의 화살표로 변경했습니다. 화살표 위치부터 북쪽으로 남은 경로만 강조하며 남쪽의 지나온 경로에는 파란색이나 흰색 경로선을 그리지 않습니다.
-
-## AI 아이콘 움직임
-
-지도 왼쪽 아래의 Gemini Astroid 아이콘을 누르면 상태 미리보기를 엽니다. Idle은 잔잔한 밝기와 크기 변화, Listening은 호흡과 퍼지는 링, Thinking은 일정한 회전과 밝기 변화, Speaking은 불규칙한 리듬의 크기 변화로 표현합니다. 선택한 상태는 페이지를 다시 열면 Idle로 돌아갑니다. 마이크·음성·AI 서비스와 연결되지 않은 시각적 데모입니다.
-
-public/ai.js는 상태와 패널 조작을, public/ai.css는 애니메이션을 관리합니다. 기기의 동작 줄이기 설정에서는 움직임을 중지하고 상태 이름을 유지합니다. 내장 브라우저에서 네 상태 전환, 패널 닫기, 1280×720 및 820×1180 화면 배치와 터치 영역을 확인했습니다. 실제 iPad 검증은 하지 않았습니다.
-
-iPad 터치 선택 수정: 다음 포커스가 없는 focusout에서 패널을 닫지 않고, 실제 외부 focusin 또는 외부 pointerdown에서 닫습니다. 터치 선택 전에 패널이 숨겨지는 이벤트 순서를 `node --test tests/ai.test.mjs`로 회귀 검증합니다. 이 테스트는 실제 Safari 기기 검증을 대체하지 않습니다.
-
+현대자동차 또는 Slow Roads의 공식 제품이 아닌 독립 연구용 프로토타입입니다.

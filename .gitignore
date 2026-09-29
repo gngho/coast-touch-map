@@ -2,3 +2,23 @@
 node_modules/
 dist/
 *.tar.gz
+
+# Local credentials, research exports, and runtime data
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+*.pem
+*.key
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.log
+coast-trials-*.csv
+coast-events-*.csv
+research-data/
+local-audio/
+.DS_Store
+Thumbs.db
