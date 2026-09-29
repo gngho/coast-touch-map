@@ -30,7 +30,7 @@ npm start
 
 로컬 서버는 `127.0.0.1`에만 바인딩하며 한 PC의 두 브라우저 탭으로 기능을 확인하는 용도입니다. iPad에서는 이 주소에 접속할 수 없습니다. 로컬 API는 테스트 소유자 계정을 사용하므로 외부 공개 서버로 실행하지 마세요. 개발 DB는 `.sites-runtime/coast.sqlite`에 생성되며 Git에서 제외됩니다.
 
-실제 PC–iPad 실험은 기존 비공개 HTTPS Site를 사용합니다.
+기존 운영 주소는 아래와 같습니다. Cloudflare 전환을 마치면 새 workers.dev 주소의 `/`와 `/admin`을 사용합니다.
 
 - 참가자: https://coast-touch-map.rudgh0862.chatgpt.site/
 - 진행자: https://coast-touch-map.rudgh0862.chatgpt.site/admin
@@ -61,7 +61,8 @@ npm start
 | `public/ai.*`, `experiment.js`, `sync.js`, `connection.js` | AI 상태, 참가자 조작, 동기화 |
 | `public/admin/` | 관리자, 오디오 진행, 배정표, 로그 요약 |
 | `server/api.mjs`, `server/domain.mjs` | 인증·세션·시행 API와 상태 전이 |
-| `server/worker.mjs` | 운영 Worker 진입점 |
+| `server/cloudflare-worker.mjs`, `server/access.mjs` | Cloudflare Worker 진입점·Access 인증 |
+| `server/worker.mjs` | 기존 Sites Worker 진입점 |
 | `server.mjs`, `server/dev-db.mjs` | 로컬 개발 서버·SQLite |
 | `db/`, `drizzle/` | 스키마·마이그레이션 |
 | `public/vendor/`, `styles/`, `icons/` | 번들 지도 라이브러리·스타일·아이콘 |
@@ -69,7 +70,10 @@ npm start
 
 ## 배포·데이터·측정 범위
 
-`npm run build`는 `dist/server/index.js`와 Sites 설정·마이그레이션을 생성합니다. `.openai/hosting.json`은 기존 Site의 연결 정보입니다. 해당 Site 권한이 있는 환경에서 Sites 도구로 배포합니다. **GitHub push만으로 운영 사이트가 자동 배포되지는 않습니다.**
+Cloudflare 이전 및 자동 배포 설정은 [CLOUDFLARE.md](CLOUDFLARE.md)를 따릅니다. `main` push에 따른 자동 배포는 Cloudflare Workers Builds에 이 저장소를 연결한 뒤 활성화됩니다.
+
+
+`npm run build`는 Cloudflare Worker를 `dist/cloudflare`에 검증 빌드합니다. 기존 Sites 번들은 `npm run build:sites`로 생성합니다. `.openai/hosting.json`은 기존 Site의 연결 정보입니다. 해당 Site 권한이 있는 환경에서 Sites 도구로 배포합니다. 기존 Sites에는 GitHub push만으로 배포되지 않습니다. 새 Cloudflare 사이트는 최초 계정·DB·Access·Git 연결 완료 후 `main` push로 자동 배포합니다.
 
 운영 DB, 로컬 DB, 참가자 로그 내보내기, 선택한 음원, 로그인 정보는 저장소에 포함하지 않습니다. 음원은 별도로 준비합니다. 스키마 변경은 `npm run db:generate`로 새 마이그레이션을 생성하며 이미 배포된 마이그레이션은 수정하지 않습니다.
 

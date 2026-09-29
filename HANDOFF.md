@@ -40,7 +40,8 @@
 
 - Node.js 24+에서 `npm ci`, `npm test`, `npm run build`, `npm start`.
 - 로컬 서버는 loopback 전용 테스트 계정. 외부 공개 금지.
-- GitHub push는 코드 공유·백업이며 운영 배포가 아님. Sites 배포는 별도 계정·권한·도구 연결 필요.
+- Cloudflare 이전 구성은 `CLOUDFLARE.md` 참조. Workers Builds 연결 후 main push → 테스트·번들 검증 → D1 마이그레이션 → 자동 배포. 계정 연결 전에는 활성화된 것으로 간주하지 않음.
+- `npm run build`는 Cloudflare dry-run, `npm run build:sites`는 기존 Sites 빌드. Access JWT 검증 없이 운영 API를 공개하지 않음.
 - `.openai/hosting.json`의 기존 project_id와 비공개 접근 정책을 유지.
 - 기존 데스크톱 자동 테스트 37개 통과 기록이 있음. 실제 iPad Safari·TV·장시간 파일럿을 검증 완료로 단정하지 않음.
 
