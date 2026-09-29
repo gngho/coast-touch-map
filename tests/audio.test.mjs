@@ -5,7 +5,7 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(intervention,options={}){
   const commands=[],events=[],clips=[],waits=[];
   const snapshot={state:{trial:{id:'trial',status:'running',intervention},suspended:false,touched:false}};
-  const flow=new AudioFlow({claim:async run=>{snapshot.state.audioRun={id:run.id,status:'running'};},command:async (action,data)=>{assert.equal(data.runId,snapshot.state.audioRun.id);assert.equal(data.trialId,'trial');commands.push([action,data.icon]);},play:async (asset,started)=>{clips.push(asset.meta.name);await started();},stop:()=>{},log:async (type,detail)=>events.push({type,detail}),changed:()=>{},wait:async ms=>waits.push(ms),...options});
+  const flow=new AudioFlow({claim:async run=>{snapshot.state.audioRun={id:run.id,status:'running'};},command:async (action,data)=>{assert.equal(data.runId,snapshot.state.audioRun.id);assert.equal(data.trialId,'trial');commands.push([action,data.icon]);},play:async (asset,started)=>{clips.push(asset.meta.name);await started();},chime:async started=>started({name:'ai-chime-v1',duration:.32}),stop:()=>{},log:async (type,detail)=>events.push({type,detail}),changed:()=>{},wait:async ms=>waits.push(ms),...options});
   flow.update(snapshot,true);
   const begin=()=>flow.begin({trial:snapshot.state.trial,assets:Object.fromEntries(['dialogue','prompt','answer'].map(k=>[k,{meta:{name:k}}])),delayMs:1000,pageId:'page'});
   return {flow,snapshot,commands,events,clips,waits,begin};
@@ -101,4 +101,27 @@ test('late claim completion cannot stop or log against a newer run',async()=>{
   f.snapshot.state.trial={id:'new-trial',status:'running',intervention:'direct'};
   f.flow.run={id:'new-run',trialId:'new-trial'};f.flow.phase='claiming';f.flow.claimed=false;
   release();await begin;assert.deepEqual(stopped,[]);assert.deepEqual(logged,[oldRun]);assert.equal(f.flow.claimed,false);assert.equal(f.flow.phase,'claiming');
+});
+
+
+test('each AI utterance has one completed chime before voice; human dialogue has none',async()=>{
+  for(const mode of ['reactive','cue','suggestion','direct']){
+    const order=[];const f=fixture(mode,{chime:async started=>{order.push('chime');await started({name:'ai-chime-v1',duration:.32});},play:async(asset,started)=>{order.push(asset.meta.name);await started();}});
+    await f.begin();
+    if(['reactive','cue'].includes(mode)){f.snapshot.state.touched=true;f.flow.update(f.snapshot,true);}
+    if(['reactive','suggestion'].includes(mode))await f.flow.confirm('button');
+    await tick();assert.equal(f.flow.phase,'complete');
+    assert.deepEqual(order,mode==='suggestion'?['dialogue','chime','prompt','chime','answer']:['dialogue','chime','answer']);
+    const chimes=f.events.filter(e=>e.detail.clip==='chime');
+    assert.deepEqual(chimes.map(e=>e.type),mode==='suggestion'?['audio_started','audio_ended','audio_started','audio_ended']:['audio_started','audio_ended']);
+  }
+});
+
+test('stop or playback failure during chime never starts the following AI voice',async()=>{
+  for(const mode of ['direct','suggestion'])for(const fail of [false,true]){
+    let finish;const f=fixture(mode,{chime:()=>new Promise((resolve,reject)=>finish=fail?()=>reject(Error('sound failed')):resolve)});
+    const begin=f.begin();await tick();assert.equal(f.flow.phase,'chime');assert.deepEqual(f.clips,['dialogue']);
+    if(!fail)f.flow.cancel();finish();await begin;
+    assert.deepEqual(f.clips,['dialogue']);assert.equal(f.flow.phase,fail?'error':'stopped');
+  }
 });

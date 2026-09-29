@@ -254,7 +254,7 @@ test('all four audio flows apply visible states before clips, consume valid touc
         const view=await f.refresh();assert.equal(view.applied,true);
         const expected=asset.meta.name==='dialogue'?(intervention==='reactive'?'idle':'listening'):'speaking';
         assert.equal(f.state.icon,expected);clips.push(asset.meta.name);await started();
-      },stop(){},log:async type=>events.push(type),changed(){},wait:async ms=>waits.push(ms)});
+      },chime:async started=>{assert.equal(f.state.icon,'speaking');await started({name:'ai-chime-v1',duration:.32});},stop(){},log:async type=>events.push(type),changed(){},wait:async ms=>waits.push(ms)});
       await sync();const assets=Object.fromEntries(['dialogue','prompt','answer'].map(k=>[k,{meta:{name:k,duration:1,sha256:'a'.repeat(64)}}]));
       assert.equal(await flow.begin({trial:f.state.trial,assets,delayMs:1000,pageId:uid()}),true);
       if(['reactive','cue'].includes(intervention)){

@@ -1,10 +1,12 @@
 import {Outbox,request,endpoint} from '/sync.js';
 import {AudioFlow,acceptsSpace} from './audio-flow.js';
+import {createChime} from './chime.js';
 
 export function initAudio({getAuth,getSnapshot,command,refresh}){
   const $=id=>document.getElementById(id),pageId=crypto.randomUUID(),outbox=new Outbox('coast-pc-audio-events-v1');
   const assets={},versions={};let context,source,rejectPlayback,flushing=false,preparing=false,pending=0,queueError='',configKey=null,testing=false;
   const ctx=()=>context||(context=new AudioContext());
+  let chimeAsset;
   function stop(){const s=source;source=null;if(s){s.onended=null;try{s.stop();}catch{}}if(rejectPlayback){const reject=rejectPlayback;rejectPlayback=null;reject(new Error('재생이 중지되었습니다.'));}}
   function play(asset,started){
     return new Promise((resolve,reject)=>{
@@ -35,6 +37,7 @@ export function initAudio({getAuth,getSnapshot,command,refresh}){
   const flow=new AudioFlow({
     claim:run=>command('begin_audio',{id:run.id,pageId:run.pageId,delayMs:run.delayMs,assets:Object.fromEntries(Object.entries(run.assets).map(([key,a])=>[key,a.meta]))},true),
     command:(action,data)=>command(action,data,true),play,stop,log,
+    chime:started=>{chimeAsset||=createChime(ctx());return play(chimeAsset,()=>started(chimeAsset.meta));},
     changed:()=>{render();refresh();}
   });
   function render(){

@@ -1,6 +1,6 @@
 # Coast — 차량 AI 상호작용 실험
 
-iPad 참가자용 내비게이션 자극과 PC 진행자용 관리자 화면을 포함한 연구용 웹앱입니다. 현재 화면·서버 버전은 **2.4.0**입니다. package.json의 2.0.0은 초기 패키지 버전입니다.
+iPad 참가자용 내비게이션 자극과 PC 진행자용 관리자 화면을 포함한 연구용 웹앱입니다. 현재 화면·서버 버전은 **2.4.1**입니다. package.json의 2.0.0은 초기 패키지 버전입니다.
 
 ## 포함된 기능
 
@@ -18,7 +18,7 @@ iPad 참가자용 내비게이션 자극과 PC 진행자용 관리자 화면을 
 - [참가자 화면 · iPad](https://coast-touch-map.rudgh0862.workers.dev/)
 - [관리자 화면 · PC](https://coast-touch-map.rudgh0862.workers.dev/admin)
 
-두 기기 모두 위 Cloudflare 주소를 사용하고 허용된 계정으로 로그인합니다. 현재 관리자 버전은 **2.4.0**입니다. GitHub `main`에 반영한 변경은 Cloudflare Workers Builds를 통해 자동 배포됩니다.
+두 기기 모두 위 Cloudflare 주소를 사용하고 허용된 계정으로 로그인합니다. 현재 관리자 버전은 **2.4.1**입니다. GitHub `main`에 반영한 변경은 Cloudflare Workers Builds를 통해 자동 배포됩니다.
 
 이전 `chatgpt.site` 주소는 별도 배포본이며 현재 변경이 반영되지 않습니다. 기존 즐겨찾기는 위 주소로 교체하세요.
 
@@ -56,6 +56,8 @@ npm start
 | Direct | Listening 대화 → Thinking → Speaking 답변 → Idle |
 
 아이콘은 모든 조건에서 상시 표시하며 숨김 상태는 없습니다. Cue만 Twinkle 도움 제안 상태를 사용합니다. 화면 적용 확인 후 해당 음원을 시작하며, Thinking 대기는 기본 1초입니다. 소리는 PC에서 나므로 OS 출력 장치를 TV/HDMI로 지정합니다. 음원은 업로드되지 않으며 새로고침이나 조건 변경 시 다시 선택해야 합니다.
+
+모든 AI 발화 직전에 공통 0.32초 띠링 알림음을 PC에서 자동 재생합니다. Suggestion은 제안과 최종 답변 앞에 각각 한 번, 나머지 조건은 최종 답변 앞에 한 번입니다. Thinking 대기 후 Speaking 화면 적용을 확인하고 알림음→음성 순서로 재생합니다. 동승자 대화에는 알림음을 붙이지 않습니다.
 
 ## 코드 구조
 

@@ -1,7 +1,7 @@
 // Fixed stimuli only. No microphone, speech recognition, or generated answers.
 export class AudioFlow {
-  constructor({claim,command,play,stop,log,changed,wait=ms=>new Promise(r=>setTimeout(r,ms))}) {
-    Object.assign(this,{claim,command,play,stop,log,changed,wait});
+  constructor({claim,command,play,chime,stop,log,changed,wait=ms=>new Promise(r=>setTimeout(r,ms))}) {
+    Object.assign(this,{claim,command,play,chime,stop,log,changed,wait});
     this.phase='idle';this.run=null;this.epoch=0;this.snapshot=null;this.connected=false;this.message='음원 선택 후 시행을 시작하세요.';
   }
   get active(){return !['idle','complete','stopped','error'].includes(this.phase);}
@@ -93,6 +93,13 @@ export class AudioFlow {
   }
   async clip(kind,epoch){
     if(!await this.awaitReady(epoch))return;
+    if(kind==='prompt'||kind==='answer'){
+      this.set('chime','AI 발화 전 알림음');
+      await this.chime(asset=>this.emit('audio_started',{clip:'chime',beforeClip:kind,asset,clock:'pc_source_start_call'}));
+      if(!this.valid(epoch))return;
+      await this.emit('audio_ended',{clip:'chime',beforeClip:kind,clock:'pc_audio_ended_callback'});
+      if(!await this.awaitReady(epoch))return;
+    }
     this.set(kind,({dialogue:'동승자 대화 재생 중',prompt:'AI 제안 재생 중',answer:'AI 답변 재생 중'})[kind]);
     const asset=this.run.assets[kind];
     await this.play(asset,()=>this.emit('audio_started',{clip:kind,asset:asset.meta,clock:'pc_source_start_call'}));
