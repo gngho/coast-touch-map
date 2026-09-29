@@ -21,8 +21,8 @@
     }
   ],
   "vars": {
-    "ACCESS_TEAM_DOMAIN": "",
-    "ACCESS_AUD": "",
+    "ACCESS_TEAM_DOMAIN": "https://holy-bar-e24a.cloudflareaccess.com",
+    "ACCESS_AUD": "af623d828892bc4d5f15e9736a91068e542a980f2b3315cda088830869cf717f",
     "ACCESS_ALLOWED_EMAIL": "rudgh0862@gmail.com"
   },
   "account_id": "52ac1f5e09e0c906807b1995c305620f"
