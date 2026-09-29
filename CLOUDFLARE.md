@@ -1,5 +1,15 @@
 # Cloudflare 이전 및 자동 배포
 
+## 현재 배포 상태 (2026-09-29)
+
+- 참가자: https://coast-touch-map.rudgh0862.workers.dev/
+- 관리자: https://coast-touch-map.rudgh0862.workers.dev/admin
+- Access 팀: `holy-bar-e24a.cloudflareaccess.com`. 허용 계정: `rudgh0862@gmail.com`.
+- 최초 자동 배포 검증 커밋: `e22743a`. GitHub CI와 Cloudflare Builds 모두 성공.
+- Cloudflare Build ID: `354db815-cf12-46b2-b85e-df64d4d53337`. 배포 버전 `7f257b4b-f3ff-4de9-8efd-6a901cc9e927`에 트래픽 100% 적용 확인.
+- 원격 D1 스키마 생성 완료. 기존 Sites 데이터는 이관하지 않았음.
+- 아래 최초 설정 절차는 재구축 시 참고용이다. 현재 연결을 다시 만들 필요는 없다.
+
 ## 배포 구조
 
 `GitHub main push → Cloudflare Workers Builds → npm test → Worker 번들 검증 → D1 migration → Worker + 정적 파일 배포`

@@ -78,3 +78,10 @@ Direct의 대화 종료 후 무입력 답변, 진행자 새로고침 후 기존 
 - Access 서명·issuer·audience·만료·허용 이메일, 위조 Sites 헤더 차단, 인증된 D1 API 요청 및 교차 출처 거부 검증.
 - Cloudflare Worker dry-run 번들 및 Wrangler 로컬 D1 마이그레이션 통과.
 - Cloudflare 계정 연결·원격 D1·Git 자동 배포·실제 두 기기 로그인/음원 재생은 아직 검증하지 않음. 기존 운영 DB는 변경하지 않음.
+
+### Cloudflare 실배포 및 자동 배포 확인
+
+- 새 원격 D1에 스키마 적용 성공. 기존 Sites DB는 변경하지 않음.
+- 참가자 `/`와 관리자 `/admin`의 미인증 요청이 Access 로그인으로 이동하는 것을 확인. 공개 JWKS endpoint HTTP 200 확인.
+- `e22743a` main push로 GitHub CI 및 Cloudflare Workers Builds가 자동 실행되어 모두 성공. 배포 버전 `7f257b4b-f3ff-4de9-8efd-6a901cc9e927`에 실제 트래픽 100% 적용 및 서버 인증 설정 반영 확인.
+- 실제 계정의 로그인 후 화면, PC–iPad 연결 및 현장 실험은 별도 확인 필요. 위 자동 배포 성공이 현장 파일럿 완료를 의미하지 않음.
