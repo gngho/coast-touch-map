@@ -13,6 +13,15 @@ iPad 참가자용 내비게이션 자극과 PC 진행자용 관리자 화면을 
 
 실제 AI, 음성 인식·녹음, GPS 추적, Slow Roads 연동은 없습니다. Slow Roads는 별도로 TV에 표시하며 지도 경로와 화살표는 고정된 시각 자극입니다.
 
+## 현재 운영 사이트
+
+- [참가자 화면 · iPad](https://coast-touch-map.rudgh0862.workers.dev/)
+- [관리자 화면 · PC](https://coast-touch-map.rudgh0862.workers.dev/admin)
+
+두 기기 모두 위 Cloudflare 주소를 사용하고 허용된 계정으로 로그인합니다. 현재 관리자 버전은 **2.4.0**입니다. GitHub `main`에 반영한 변경은 Cloudflare Workers Builds를 통해 자동 배포됩니다.
+
+이전 `chatgpt.site` 주소는 별도 배포본이며 현재 변경이 반영되지 않습니다. 기존 즐겨찾기는 위 주소로 교체하세요.
+
 ## 다른 PC에서 실행
 
 Node.js **24 이상**, npm, Git이 필요합니다. 저장소를 복제한 폴더에서 실행합니다.
@@ -29,11 +38,6 @@ npm start
 - 종료: 실행한 터미널에서 Ctrl+C.
 
 로컬 서버는 `127.0.0.1`에만 바인딩하며 한 PC의 두 브라우저 탭으로 기능을 확인하는 용도입니다. iPad에서는 이 주소에 접속할 수 없습니다. 로컬 API는 테스트 소유자 계정을 사용하므로 외부 공개 서버로 실행하지 마세요. 개발 DB는 `.sites-runtime/coast.sqlite`에 생성되며 Git에서 제외됩니다.
-
-기존 운영 주소는 아래와 같습니다. Cloudflare 전환을 마치면 새 workers.dev 주소의 `/`와 `/admin`을 사용합니다.
-
-- 참가자: https://coast-touch-map.rudgh0862.chatgpt.site/
-- 진행자: https://coast-touch-map.rudgh0862.chatgpt.site/admin
 
 ## 실험 진행
 
@@ -70,10 +74,10 @@ npm start
 
 ## 배포·데이터·측정 범위
 
-Cloudflare 이전 및 자동 배포 설정은 [CLOUDFLARE.md](CLOUDFLARE.md)를 따릅니다. `main` push에 따른 자동 배포는 Cloudflare Workers Builds에 이 저장소를 연결한 뒤 활성화됩니다.
+Cloudflare 이전 및 자동 배포 설정은 [CLOUDFLARE.md](CLOUDFLARE.md)를 따릅니다. 현재 이 저장소는 Cloudflare Workers Builds에 연결되어 `main` push에 따른 자동 배포가 활성화되어 있습니다.
 
 
-`npm run build`는 Cloudflare Worker를 `dist/cloudflare`에 검증 빌드합니다. 기존 Sites 번들은 `npm run build:sites`로 생성합니다. `.openai/hosting.json`은 기존 Site의 연결 정보입니다. 해당 Site 권한이 있는 환경에서 Sites 도구로 배포합니다. 기존 Sites에는 GitHub push만으로 배포되지 않습니다. 새 Cloudflare 사이트는 최초 계정·DB·Access·Git 연결 완료 후 `main` push로 자동 배포합니다.
+`npm run build`는 Cloudflare Worker를 `dist/cloudflare`에 검증 빌드합니다. 기존 Sites 번들은 `npm run build:sites`로 생성합니다. `.openai/hosting.json`은 이전 Site의 연결 정보입니다. 기존 Sites에는 GitHub push만으로 배포되지 않습니다. 현재 운영 중인 Cloudflare 사이트에 `main` push로 자동 배포합니다.
 GitHub Actions는 테스트와 두 플랫폼의 빌드 아티팩트를 검증·보관합니다. [CI·배포 안내](docs/CI-AND-DEPLOYMENT.md)를 참고하세요.
 
 
