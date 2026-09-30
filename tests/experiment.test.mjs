@@ -239,12 +239,13 @@ test('audio claims are once per trial; authenticated logs are idempotent and rem
 });
 
 
-test('all four flows start dialogue before Listening, require linked touch and return Idle',async()=>{
+test('all four flows start dialogue before Listening, require linked touch and return Idle',{timeout:15000},async()=>{
   for(const intervention of INTERVENTIONS){
     const f=await fixture();try{
       await f.start('friend',intervention);
       const states=[],clips=[],waits=[],events=[];
-      let flow;
+      let flow,finish;
+      const completed=new Promise(resolve=>{finish=resolve;});
       const sync=async()=>flow.update(await f.refresh(),true,true);
       const command=async(action,data)=>{
         const r=await f.command(action,data);assert.equal(r.status,200,JSON.stringify(r.result));
@@ -257,7 +258,7 @@ test('all four flows start dialogue before Listening, require linked touch and r
         await f.refresh();
         const expected=asset.meta.name==='dialogue'?'idle':'speaking';
         assert.equal(f.state.icon,expected);clips.push(asset.meta.name);await started();
-      },chime:async started=>{assert.equal(f.state.icon,'speaking');await started({name:'ai-chime-v1',duration:.32});},stop(){},log:async type=>events.push(type),changed(){},now:()=>0,wait:async ms=>waits.push(ms)});
+      },chime:async started=>{assert.equal(f.state.icon,'speaking');await started({name:'ai-chime-v1',duration:.32});},stop(){},log:async type=>events.push(type),changed(){if(['complete','error','stopped'].includes(flow.phase))finish();},now:()=>0,wait:async ms=>waits.push(ms)});
       await sync();const assets=Object.fromEntries(['dialogue','prompt','answer'].map(k=>[k,{meta:{name:k,duration:1,sha256:'a'.repeat(64)}}]));
       assert.equal(await flow.begin({trial:f.state.trial,assets,delayMs:1000,pageId:uid()}),true);
       if(['reactive','cue'].includes(intervention)){
@@ -270,7 +271,8 @@ test('all four flows start dialogue before Listening, require linked touch and r
         await f.event('touch',{...touch,id:uid()});await sync();
       }
       if(['reactive','suggestion'].includes(intervention)){assert.equal(flow.canConfirm,true);await flow.confirm('button');}
-      for(let i=0;i<100&&flow.active;i++)await tick();
+      // Wait for the terminal transition, not a machine-dependent number of event-loop turns.
+      await completed;
       assert.equal(flow.phase,'complete');assert.equal(f.state.icon,'idle');assert.equal(f.state.audioRun.status,'complete');
       assert.deepEqual(clips,intervention==='suggestion'?['dialogue','prompt','answer']:['dialogue','answer']);
       assert.equal(waits.filter(ms=>ms===180).length,intervention==='suggestion'?2:1);assert.ok(waits.every(ms=>ms>=0&&ms<=1000));
