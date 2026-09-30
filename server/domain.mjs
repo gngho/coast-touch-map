@@ -1,5 +1,5 @@
 import {validateConfig} from '../public/admin/schedule-model.js';
-export const VERSION = '2.5.0';
+export const VERSION = '2.6.0';
 export const RELATIONSHIPS = ['friend','partner','coworker'];
 export const INTERVENTIONS = ['reactive','cue','suggestion','direct'];
 export class Problem extends Error { constructor(message,status=400){super(message);this.status=status;} }
@@ -23,6 +23,10 @@ export function transition(previous,action,data,context){
     requireThat(data.expectedTrialCount===s.trialCount,'시행 수가 변경되었습니다. 초기화 창을 다시 열어 주세요.',409);
     const count=s.trialCount;
     Object.assign(s,initialState(),{generation:previous.generation+1,audioRun:null,resetGeneration:previous.generation+1,lastReset:{id:data.id,at:now,clearedTrials:count}});
+  }else if(action==='complete_survey'){
+    requireThat(!active,'현재 시나리오를 먼저 종료해 주세요.',409);
+    advance();s.lastSurvey={planId:data.planId,participant:data.participant,blockPosition:data.blockPosition,completedAt:now};
+    event.type='survey_completed';event.payload={...s.lastSurvey};
   }else if(action==='create_schedule'){
     requireThat(!active,'현재 시행을 먼저 종료하거나 중단해 주세요.',409);
     let config;try{config=validateConfig(data.config);}catch(e){throw new Problem(e.message);}

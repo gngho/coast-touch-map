@@ -1,5 +1,5 @@
 import {VERSION,Problem,requireThat,initialState,transition} from './domain.mjs';
-import {planProgress} from '../public/admin/schedule-model.js';
+import {planProgress,DESIGN} from '../public/admin/schedule-model.js';
 import {WARN_MS,LOST_MS} from '../public/connection.js';
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
 const hash=async text=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))),b=>b.toString(16).padStart(2,'0')).join('');
@@ -13,7 +13,8 @@ const wasReset=async(db,id,generation)=>generation<(rowState(await first(db,'SEL
 async function schedules(db,sessionId){
   const plans=(await query(db,"SELECT id,payload FROM events WHERE session_id=? AND type='schedule_created' ORDER BY server_time,id",sessionId).all()).results;
   const prepared=(await query(db,"SELECT e.payload,t.id,t.number,t.participant,t.status FROM events e JOIN trials t ON e.trial_id=t.id AND e.session_id=t.session_id WHERE e.session_id=? AND e.type='prepare'",sessionId).all()).results;
-  return plans.map(row=>{const plan=JSON.parse(row.payload),attempts=prepared.flatMap(t=>{const ref=JSON.parse(t.payload).schedule;return ref?.planId===row.id?[{id:t.id,number:t.number,participant:t.participant,status:t.status,position:ref.position}]:[];});return {...plan,participants:planProgress(plan.config,attempts)};});
+  const surveys=(await query(db,"SELECT payload FROM events WHERE session_id=? AND type='survey_completed'",sessionId).all()).results.map(e=>JSON.parse(e.payload));
+  return plans.map(row=>{const plan=JSON.parse(row.payload),attempts=prepared.flatMap(t=>{const ref=JSON.parse(t.payload).schedule;return ref?.planId===row.id?[{id:t.id,number:t.number,participant:t.participant,status:t.status,position:ref.position}]:[];});return {...plan,participants:planProgress(plan.config,attempts,surveys.filter(s=>s.planId===row.id))};});
 }
 async function scheduledPreparation(db,row,data){
   const ref=data.schedule;
@@ -24,7 +25,7 @@ async function scheduledPreparation(db,row,data){
   const step=person.steps.find(s=>s.position===ref.position);
   requireThat(step.status!=='active','이미 준비 또는 진행 중인 배정입니다.',409);
   requireThat(data.relationship===step.relationship&&data.intervention===step.intervention&&data.scenario===step.scenario,'선택한 조건이 배정표와 다릅니다.',409);
-  return {...data,schedule:{planId:plan.id,design:plan.config.design,seed:plan.config.seed,allocationIndex:person.allocationIndex,block:person.block,row:person.row,caseVariant:person.caseVariant,position:step.position,condition:step.condition,poi:step.poi}};
+  return {...data,schedule:{planId:plan.id,design:plan.config.design,seed:plan.config.seed,allocationIndex:person.allocationIndex,block:person.block,row:person.row,caseVariant:person.caseVariant,position:step.position,condition:step.condition,poi:step.poi,blockPosition:step.blockPosition,episodePosition:step.episodePosition,family:step.family,subtype:step.subtype,pairOrder:step.pairOrder}};
 }
 function view(row){const s=rowState(row),stamp=now(),deviceAgeMs=Math.max(0,stamp-row.device_seen),adminAgeMs=Math.max(0,stamp-row.admin_seen);return {id:row.id,state:s,version:VERSION,serverTime:stamp,paired:!!row.device_hash,deviceAgeMs,adminAgeMs,deviceConnected:!!row.device_hash&&deviceAgeMs<WARN_MS,adminConnected:adminAgeMs<WARN_MS,adminAlive:adminAgeMs<LOST_MS,applied:row.applied_generation===s.generation&&(row.applied_trial||null)===(s.trial?.id||null),appliedGeneration:row.applied_generation,pendingEvents:row.pending_events};}
 function diagnostics(value){const v=value||{},out={};for(const key of ['localAgeMs','peerAgeMs','pendingEvents'])if(Number.isFinite(v[key])&&v[key]>=0)out[key]=Math.round(Math.min(v[key],86400000));if(['REQUEST_TIMEOUT','CONNECTION_ERROR','HTTP_ERROR'].includes(v.lastError))out.lastError=v.lastError;if(['local_timeout','admin_timeout','visibility'].includes(v.cause))out.cause=v.cause;return out;}
@@ -42,7 +43,12 @@ async function commit(db,row,eventId,action,data,actor,extra={}){
     if(actor==='device'&&action==='touch'&&Number.isInteger(extra.generation)&&extra.generation<(before.resetGeneration||0))return row;
     if(actor==='admin'){
       requireThat(data.baseGeneration===before.generation,'다른 변경이 반영되었습니다. 현재 상태를 확인한 뒤 다시 눌러 주세요.',409);
-      if(!['abort','note','unpair','reset_records','create_schedule','stop_audio'].includes(action))requireThat(row.device_hash&&stamp-row.device_seen<WARN_MS,'iPad 연결을 확인해 주세요.',409);
+      if(!['abort','note','unpair','reset_records','complete_survey','create_schedule','stop_audio'].includes(action))requireThat(row.device_hash&&stamp-row.device_seen<WARN_MS,'iPad 연결을 확인해 주세요.',409);
+    }
+    if(action==='complete_survey'){
+      const plan=(await schedules(db,row.id)).find(p=>p.id===data.planId);
+      const person=plan?.participants.find(p=>p.participant===data.participant);
+      requireThat(plan?.config.design===DESIGN&&person?.pendingSurvey===data.blockPosition&&Number.isInteger(data.blockPosition),'두 시나리오를 종료한 다음 대기 중인 묶음 설문을 확인해 주세요.',409);
     }
     if(action==='prepare'&&data.schedule)data=await scheduledPreparation(db,row,data);
     const {state,event}=transition(before,action,data,{now:stamp,eventId,newId:crypto.randomUUID(),applied:row.applied_generation===before.generation&&row.applied_trial===before.trial?.id});
@@ -59,7 +65,7 @@ async function commit(db,row,eventId,action,data,actor,extra={}){
       row=await first(db,'SELECT * FROM sessions WHERE id=?',row.id);continue;
     }
     const statements=[query(db,'UPDATE sessions SET state=?,revision=revision+1,mutation=? WHERE id=? AND revision=?',JSON.stringify(state),eventId,row.id,row.revision),
-      query(db,'INSERT OR IGNORE INTO events (id,session_id,trial_id,type,actor,server_time,client_time,page_id,generation,payload) SELECT ?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM sessions WHERE id=? AND mutation=?)',eventId,row.id,action==='create_schedule'?null:data.trialId||trial?.id||null,event.type,actor,stamp,extra.clientTime||null,extra.pageId||null,state.generation,JSON.stringify(event.payload),row.id,eventId)];
+      query(db,'INSERT OR IGNORE INTO events (id,session_id,trial_id,type,actor,server_time,client_time,page_id,generation,payload) SELECT ?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM sessions WHERE id=? AND mutation=?)',eventId,row.id,['create_schedule','complete_survey'].includes(action)?null:data.trialId||trial?.id||null,event.type,actor,stamp,extra.clientTime||null,extra.pageId||null,state.generation,JSON.stringify(event.payload),row.id,eventId)];
     if(trial)statements.push(query(db,`INSERT INTO trials (id,session_id,number,participant,relationship,intervention,scenario,app_version,status,prepared_at,started_at,ended_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM sessions WHERE id=? AND mutation=?) ON CONFLICT(id) DO UPDATE SET status=excluded.status,started_at=excluded.started_at,ended_at=excluded.ended_at`,trial.id,row.id,trial.number,trial.participant,trial.relationship,trial.intervention,trial.scenario,trial.appVersion,trial.status,trial.preparedAt,trial.startedAt,trial.endedAt,row.id,eventId));
     const result=await db.batch(statements);
     if(result[0].meta.changes)return first(db,'SELECT * FROM sessions WHERE id=?',row.id);
@@ -121,7 +127,7 @@ export async function api(request,env){
     }
     if(operation==='command'&&post){
       requireThat(role==='admin','진행자만 화면을 제어할 수 있습니다.',403);
-      requireThat(['prepare','start','end','abort','setup','show_cue','arm_reactive','set_icon','finish_audio','stop_audio','resume','note','unpair','begin_audio','reset_records','create_schedule'].includes(data.action),'잘못된 조작입니다.');
+      requireThat(['prepare','start','end','abort','setup','show_cue','arm_reactive','set_icon','finish_audio','stop_audio','resume','note','unpair','begin_audio','reset_records','complete_survey','create_schedule'].includes(data.action),'잘못된 조작입니다.');
       row=await commit(db,row,data.id,data.action,data,'admin');
       if(data.action==='unpair'){
         await query(db,'UPDATE sessions SET device_hash=NULL,page_id=NULL,device_seen=0,applied_generation=-1 WHERE id=?',id).run();

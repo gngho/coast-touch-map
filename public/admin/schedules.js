@@ -1,7 +1,8 @@
 import {request,endpoint} from '/sync.js';
-import {DESIGN,DESIGN_NOTE,validateConfig,planProgress} from './schedule-model.js';
+import {DESIGN,DESIGN_NOTE,CASE_LABELS,validateConfig,planProgress} from './schedule-model.js';
+import {DESIGN_NOTE as LEGACY_NOTE} from './schedule-legacy.js';
 import {escape,toCsv,kst,relationships,interventions} from './report-model.js';
-const poiLabels={restaurant:'식당',museum:'박물관'},statusLabels={complete:'완료',active:'준비/진행 중',retry:'중단 · 재시도 필요',pending:'대기'};
+const poiLabels=CASE_LABELS,statusLabels={complete:'완료',active:'준비/진행 중',retry:'중단 · 재시도 필요',pending:'대기'};
 export function initSchedules({getAuth,getSnapshot,command,isBusy,isConnected}){
   const $=id=>document.getElementById(id);let plans=[],preview=null,loading=false,lastKey='',revision=0;
   $('schedule-note').textContent=DESIGN_NOTE;$('schedule-seed').value=crypto.randomUUID().slice(0,8);
@@ -13,20 +14,23 @@ export function initSchedules({getAuth,getSnapshot,command,isBusy,isConnected}){
   }
   function config(){return validateConfig({design:DESIGN,seed:$('schedule-seed').value.trim(),participants:$('schedule-ids').value.trim().split(/\s+/).filter(Boolean)});}
   function message(text){$('schedule-status').textContent=text;}
-  function showPeople(){const keep=$('schedule-person').value;const p=current();$('schedule-person').replaceChildren(...(p?.participants||[]).map(x=>new Option(`${x.participant} · ${x.completed}/12 완료`,x.participant)));if(p?.participants.some(x=>x.participant===keep))$('schedule-person').value=keep;show();}
-  function show(){const p=current(),person=selected();$('schedule-view').hidden=!p;
+  function showPeople(){const keep=$('schedule-person').value;const p=current();$('schedule-person').replaceChildren(...(p?.participants||[]).map(x=>new Option(`${x.participant} · ${x.completed}/${x.steps.length} 시나리오 완료${x.blocks?` · 설문 ${x.completedBlocks}/12`:""}`,x.participant)));if(p?.participants.some(x=>x.participant===keep))$('schedule-person').value=keep;show();}
+  function show(){const p=current(),person=selected();$('schedule-note').textContent=p&&p.config.design!==DESIGN?LEGACY_NOTE:DESIGN_NOTE;$('schedule-view').hidden=!p;
     if(!p||!person){$('schedule-table').replaceChildren();update();return;}
-    $('schedule-info').textContent=`${preview?'저장 전 미리보기':'서버 저장됨'} · ${p.config.participants.length}명 · 시드 ${p.config.seed} · 참가자 배정 ${person.allocationIndex}번 · ${person.block}블록 / 행 ${person.row} / 사례 ${person.caseVariant}${p.config.participants.length%12?' · 마지막 불완전 블록은 조건 순서 균형이 완성되지 않습니다.':''}`;
-    $('schedule-table').innerHTML=`<div class="report-table-wrap"><table class="report-table"><thead><tr>${['순서','동승자','AI 개입 방식','POI 사례','시나리오 식별자','실제 시행 / 상태'].map(s=>`<th scope="col">${s}</th>`).join('')}</tr></thead><tbody>${person.steps.map(s=>`<tr${s.position===person.nextPosition?' class="schedule-next-row"':''}><td>${s.position}${s.position===person.nextPosition?' · 다음':''}</td><td>${relationships[s.relationship]}</td><td>${interventions[s.intervention]}</td><td>${poiLabels[s.poi]}</td><td>${escape(s.scenario)}</td><td>${statusLabels[s.status]}<small>${s.attempts.map(a=>`시행 ${a.number} (${({ended:'종료',aborted:'중단',prepared:'준비',running:'진행'})[a.status]})`).join(', ')||'아직 시행하지 않음'}</small></td></tr>`).join('')}</tbody></table></div>`;
+    $('schedule-info').textContent=`${preview?'저장 전 미리보기':'서버 저장됨'} · ${p.config.participants.length}명 · ${p.config.design===DESIGN?"새 설계: 24회/설문 12회":"이전 설계: 12회"} · 시드 ${p.config.seed} · 참가자 배정 ${person.allocationIndex}번 · ${person.block}블록 / 행 ${person.row} / 사례 ${person.caseVariant}${p.config.participants.length%12?' · 마지막 불완전 블록은 조건 순서 균형이 완성되지 않습니다.':''}`;
+    $('schedule-table').innerHTML=`<div class="report-table-wrap"><table class="report-table"><thead><tr>${['시나리오 순서 / 묶음','동승자','AI 개입 방식','시나리오 유형','시나리오 식별자','실제 시행 / 설문 상태'].map(s=>`<th scope="col">${s}</th>`).join('')}</tr></thead><tbody>${person.steps.map(s=>`<tr${s.position===person.nextPosition?' class="schedule-next-row"':''}><td>${s.position}${s.position===person.nextPosition?' · 다음':''}${s.blockPosition?`<small>묶음 ${s.blockPosition}/12 · ${s.episodePosition}/2</small>`:''}</td><td>${relationships[s.relationship]}</td><td>${interventions[s.intervention]}</td><td>${s.family?`${s.family==='place'?'장소':'정보'} / `:''}${poiLabels[s.poi]}</td><td>${escape(s.scenario)}</td><td>${statusLabels[s.status]}<small>${s.attempts.map(a=>`시행 ${a.number} (${({ended:'종료',aborted:'중단',prepared:'준비',running:'진행'})[a.status]})`).join(', ')||'아직 시행하지 않음'}</small>${s.episodePosition===2?`<small>묶음 설문: ${person.blocks[s.blockPosition-1].surveyCompleted?'완료':person.pendingSurvey===s.blockPosition?'진행 후 완료 확인 필요':'대기'}</small>`:''}</td></tr>`).join('')}</tbody></table></div>`;
     update();
   }
   function update(){const state=getSnapshot()?.state,active=['prepared','running'].includes(state?.trial?.status),person=selected();
     $('schedule-save').disabled=!getAuth()||loading||isBusy()||active;
     $('schedule-load').disabled=!getAuth()||loading;
     $('schedule-next').disabled=!!preview||!current()||!person?.nextPosition||loading||isBusy()||active||!isConnected()||!!state?.suspended;
-    $('schedule-next').textContent=person?.nextPosition?`다음 배정 시행 준비 · ${person.nextPosition}/12`:'배정 시행 모두 완료';
+    $('schedule-next').textContent=person?.pendingSurvey?`묶음 ${person.pendingSurvey} 설문 대기`:person?.nextPosition?`다음 시나리오 준비 · ${person.nextPosition}/${person.steps.length}`:'배정 시행 모두 완료';
+    $('schedule-survey').hidden=!person?.pendingSurvey;
+    $('schedule-survey').disabled=!!preview||loading||isBusy()||active||!person?.pendingSurvey;
+    $('schedule-survey').textContent=`묶음 ${person?.pendingSurvey||''} 설문 완료 확인`;
     $('schedule-csv').disabled=!current();
-    const key=`${state?.trial?.id||''}|${state?.trial?.status||''}|${state?.schedule?.id||''}`;
+    const key=`${state?.trial?.id||''}|${state?.trial?.status||''}|${state?.schedule?.id||''}|${state?.lastSurvey?.completedAt||''}`;
     if(key!==lastKey){lastKey=key;if($('schedule-section').open&&!preview&&!loading)void refresh();}
   }
   async function refresh(preferred){if(loading||!getAuth())return;loading=true;const v=revision;update();
@@ -54,7 +58,12 @@ export function initSchedules({getAuth,getSnapshot,command,isBusy,isConnected}){
       await refresh(plan.id);message(`${person.participant} · 순서 ${step.position} 조건을 준비했습니다. 해당 음원을 선택하고 iPad 적용 확인 후 시행을 시작하세요.`);
     }catch(error){message(error.message);}
   };
-  $('schedule-csv').onclick=()=>{const plan=current();if(!plan)return;const rows=plan.participants.flatMap(p=>p.steps.map(s=>({'참가자':p.participant,'참가자 배정 번호':p.allocationIndex,'블록':p.block,'라틴 행':p.row,'사례 변형':p.caseVariant,'참가자 내 순서':s.position,'조건 코드':s.condition,'동승자 관계':relationships[s.relationship],'개입 방식':interventions[s.intervention],'POI 사례':poiLabels[s.poi],'시나리오':s.scenario,'진행 상태':statusLabels[s.status],'실제 시행 번호':s.attempts.map(a=>a.number).join(';'),'배정 시드':plan.config.seed,'배정 방식':plan.config.design,'배정표 ID':plan.id||'미저장'})));
+  $('schedule-survey').onclick=async()=>{
+    if($('schedule-survey').disabled)return;
+    const plan=current(),person=selected();
+    try{await command('complete_survey',{planId:plan.id,participant:person.participant,blockPosition:person.pendingSurvey},true);await refresh(plan.id);message('묶음 설문 완료를 기록했습니다. 다음 조건을 진행할 수 있습니다.');}catch(e){message(e.message);}
+  };
+  $('schedule-csv').onclick=()=>{const plan=current();if(!plan)return;const rows=plan.participants.flatMap(p=>p.steps.map(s=>({'참가자':p.participant,'참가자 배정 번호':p.allocationIndex,'블록':p.block,'라틴 행':p.row,'사례 변형':p.caseVariant,'참가자 내 순서':s.position,'조건 코드':s.condition,'동승자 관계':relationships[s.relationship],'개입 방식':interventions[s.intervention],'묶음 순서':s.blockPosition||'','묶음 내 순서':s.episodePosition||'','시나리오군':s.family==='place'?'장소':s.family==='information'?'정보':'','시나리오 유형':poiLabels[s.poi],'묶음 내 배정 순서':s.pairOrder||'','묶음 설문 완료':s.blockPosition?(p.blocks[s.blockPosition-1].surveyCompleted?'완료':'대기'):'','설문 완료 시각':s.blockPosition?kst(p.blocks[s.blockPosition-1].surveyAt):'','시나리오':s.scenario,'진행 상태':statusLabels[s.status],'실제 시행 번호':s.attempts.map(a=>a.number).join(';'),'배정 시드':plan.config.seed,'배정 방식':plan.config.design,'배정표 ID':plan.id||'미저장'})));
     const url=URL.createObjectURL(new Blob([toCsv(rows)],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=`coast-allocation-${plan.config.seed}-${kst(Date.now()).slice(0,10)}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
   fillIds();return {update,clear(){revision++;plans=[];preview=null;$('schedule-plan').replaceChildren();showPeople();message('기록 초기화로 배정표도 초기화되었습니다.');}};

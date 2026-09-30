@@ -1,7 +1,7 @@
 // Derived views only: never alter observations or combine clocks across pages/devices.
 export const relationships={friend:'친구',partner:'연인',coworker:'직장동료'};
 export const interventions={reactive:'Reactive',cue:'Proactive cue',suggestion:'Proactive suggestion',direct:'Proactive direct'};
-const labels={arm_reactive:'Reactive 터치 준비',reactive_ready:'iPad Reactive 터치 준비',reactive_touch:'Reactive 아이콘 터치',finish_audio:'재생 완료 · Idle',stop_audio:'재생 정지 · Idle',audio_connection_delayed:'재생 중 연결 응답 지연',audio_connection_restored:'재생 중 연결 응답 복구',schedule_created:'배정표 저장',prepare:'시행 준비',start:'시행 시작',end:'시행 종료',abort:'시행 중단',setup:'준비 모드 복귀',unpair:'iPad 연결 해제',show_cue:'Cue 표시 요청',set_icon:'아이콘 변경 요청',applied:'iPad 화면 적용 확인',cue_displayed:'iPad Cue 표시 기록',cue_touch:'Cue 첫 터치 기록',suspend:'안전 대기',resume:'연결 재개',note:'진행자 메모',connection_lost:'연결 끊김 감지',visibility_hidden:'iPad 화면 비활성',begin_audio:'자동 재생 시작 요청',audio_started:'PC 음원 재생 시작',audio_ended:'PC 음원 재생 종료',operator_confirm:'진행자 응답 확인',audio_flow_complete:'자동 재생 완료',audio_flow_stopped:'자동 재생 정지',audio_flow_error:'자동 재생 오류'};
+const labels={survey_completed:'묶음 설문 완료',arm_reactive:'Reactive 터치 준비',reactive_ready:'iPad Reactive 터치 준비',reactive_touch:'Reactive 아이콘 터치',finish_audio:'재생 완료 · Idle',stop_audio:'재생 정지 · Idle',audio_connection_delayed:'재생 중 연결 응답 지연',audio_connection_restored:'재생 중 연결 응답 복구',schedule_created:'배정표 저장',prepare:'시행 준비',start:'시행 시작',end:'시행 종료',abort:'시행 중단',setup:'준비 모드 복귀',unpair:'iPad 연결 해제',show_cue:'Cue 표시 요청',set_icon:'아이콘 변경 요청',applied:'iPad 화면 적용 확인',cue_displayed:'iPad Cue 표시 기록',cue_touch:'Cue 첫 터치 기록',suspend:'안전 대기',resume:'연결 재개',note:'진행자 메모',connection_lost:'연결 끊김 감지',visibility_hidden:'iPad 화면 비활성',begin_audio:'자동 재생 시작 요청',audio_started:'PC 음원 재생 시작',audio_ended:'PC 음원 재생 종료',operator_confirm:'진행자 응답 확인',audio_flow_complete:'자동 재생 완료',audio_flow_stopped:'자동 재생 정지',audio_flow_error:'자동 재생 오류'};
 const clips={chime:'AI 발화 전 알림음',dialogue:'동승자 대화',prompt:'AI 제안 질문',answer:'AI 최종 답변'};
 const reasons={admin_recovery:'진행자 세션 복구',connection_gap:'연결 응답 지연',reload:'iPad 페이지 재진입',visibility:'iPad 화면 전환'};
 const icons={idle:'Idle',twinkle:'Twinkle',listening:'Listening',thinking:'Thinking',speaking:'Speaking',hidden:'숨김 (이전 버전)'};
@@ -32,6 +32,7 @@ export function phase(event,trial){
 }
 export function describe(event){
   const p=event.payload;
+  if(event.type==='survey_completed')return `${p.participant} · 묶음 ${p.blockPosition} 설문 완료 · 배정표 ${p.planId}`;
   if(event.type==='schedule_created')return `라틴스퀘어 배정표 저장 · ${p.config?.participants?.length||0}명 · 시드 ${p.config?.seed||''}`;
   if(event.type==='prepare')return `${p.participant||''} · ${relationships[p.relationship]||p.relationship||''} · ${interventions[p.intervention]||p.intervention||''} · ${p.scenario||'시나리오 미입력'}`;
   if(['cue_touch','reactive_touch'].includes(event.type))return `${p.accepted?'수락됨':'수락되지 않은 지연 기록'} · 표시 후 ${duration(p.reactionMs)}`;
@@ -89,7 +90,7 @@ export function summaryRows(input){return summarize(input).map(s=>({
   '시작 전 주의 기록':s.before,'시행 중 주의 기록':s.during,'종료 후 주의 기록':s.after,'검토 사항':s.review,'메모':s.notes,'시행 ID':s.trial.id,'앱 버전':s.trial.app_version,
   ...allocationColumns(s.events.find(e=>e.type==='prepare')?.payload.schedule)
 }));}
-function allocationColumns(ref){return {'배정표 ID':ref?.planId||'','참가자 내 배정 순서':ref?.position??'','라틴 행':ref?.row??'','배정 블록':ref?.block??'','POI 사례':({restaurant:'식당',museum:'박물관'})[ref?.poi]||'','배정 시드':ref?.seed||'','배정 방식':ref?.design||''};}
+function allocationColumns(ref){return {'조건 묶음 순서':ref?.blockPosition??'','묶음 내 시나리오 순서':ref?.episodePosition??'','시나리오군':ref?.family||'','시나리오 유형':ref?.subtype||'','묶음 내 배정 순서':ref?.pairOrder||'','배정표 ID':ref?.planId||'','참가자 내 배정 순서':ref?.position??'','라틴 행':ref?.row??'','배정 블록':ref?.block??'','POI 사례':({restaurant:'식당',museum:'박물관',cafe:'카페',weather:'날씨',road:'도로'})[ref?.poi]||'','배정 시드':ref?.seed||'','배정 방식':ref?.design||''};}
 export function eventRows(input){const {trials,events}=normalize(input),byId=new Map(trials.map(t=>[t.id,t]));return events.map(e=>{const t=byId.get(e.trial_id);return {
   '시행 번호':t?.number||'','참가자':t?.participant||'','동승자 관계':relationships[t?.relationship]||'','개입 방식':interventions[t?.intervention]||'','시나리오':t?.scenario||'',
   '구간 (서버 저장 기준)':phase(e,t),'서버 저장 시각 (KST)':kst(e.server_time),'기기 기록 시각 (KST·기기간 비교 금지)':kst(e.client_time),

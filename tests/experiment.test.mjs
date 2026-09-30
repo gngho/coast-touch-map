@@ -313,3 +313,29 @@ test('server refuses AI response before a current participant touch and stores a
     }finally{f.close();}
   }
 });
+
+
+test('paired survey gate persists, rejects early/wrong completion and duplicate events are idempotent',async()=>{
+ const f=await fixture();try{
+  const planId=uid();await f.command('create_schedule',{config:{design:DESIGN,seed:'pairs',participants:['P001']}},planId);
+  const read=async()=> (await f.call(f.path('schedule'),{auth:f.admin})).result.plans[0];
+  const prepare=async(position)=>{const p=await read(),s=p.participants[0].steps[position-1];return f.command('prepare',{participant:'P001',relationship:s.relationship,intervention:s.intervention,scenario:s.scenario,schedule:{planId,position}});};
+  const data={planId,participant:'P001',blockPosition:1};
+  assert.equal((await f.command('complete_survey',data)).status,409);
+  for(const position of [1,2]){
+   assert.equal((await prepare(position)).status,200);assert.equal(f.state.trial.schedule.blockPosition,1);assert.equal(f.state.trial.schedule.episodePosition,position);
+   await f.apply();await f.command('start');await f.command('end');
+  }
+  assert.equal((await read()).participants[0].pendingSurvey,1);
+  assert.equal((await prepare(3)).status,409);
+  assert.equal((await f.command('complete_survey',{...data,blockPosition:2})).status,409);
+  assert.equal((await f.command('complete_survey',{...data,participant:'P999'})).status,409);
+  const eventId=uid();assert.equal((await f.command('complete_survey',data,eventId)).status,200);
+  assert.equal((await f.command('complete_survey',data,eventId)).status,200);
+  assert.equal((await f.command('complete_survey',data)).status,409);
+  const person=(await read()).participants[0];assert.equal(person.completedBlocks,1);assert.equal(person.nextPosition,3);assert.ok(person.blocks[0].surveyAt);
+  const exported=(await f.call(f.path('export?format=json'),{auth:f.admin})).result;
+  const events=exported.events.filter(e=>e.type==='survey_completed');assert.equal(events.length,1);assert.equal(events[0].trial_id,null);
+  assert.equal((await prepare(3)).status,200);
+ }finally{f.close();}
+});
