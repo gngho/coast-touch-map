@@ -5,8 +5,10 @@ import {initRecordReset} from './reset.js';
 import {initReports} from './reports.js';
 import {initSchedules} from './schedules.js';
 import {connectionHealth} from '/connection.js';
+import {initializeAiPreview} from './ai-preview.js';
 const $=id=>document.getElementById(id);
-const UI_VERSION='2.7.0';
+const updateAiPreview=initializeAiPreview($('preview-icon'));
+const UI_VERSION='2.7.1';
 const relations={friend:'친구',partner:'연인',coworker:'직장동료'},methods={reactive:'Reactive',cue:'Proactive cue',suggestion:'Proactive suggestion',direct:'Proactive direct'};
 const icons={idle:'Idle',twinkle:'Twinkle',listening:'Listening',thinking:'Thinking',speaking:'Speaking'};
 const statuses={prepared:'준비 완료',running:'진행 중',ended:'종료',aborted:'중단'};
@@ -49,7 +51,8 @@ function render(){
   $('applied').textContent=!connected?'확인 불가':snapshot?.applied?'적용 완료':'명령 전달 중';
   $('touched').textContent=['cue','reactive'].includes(t?.intervention)?(s?.touched?'터치됨':s?.touchReady?'터치 대기':'준비 전'):'해당 없음';
   $('pending').textContent=!connected?'확인 불가':`${snapshot?.pendingEvents||0}건`;
-  $('icon-state').textContent=icons[s?.icon]||'Idle';$('preview-icon').hidden=false;
+  const icon=icons[s?.icon]?s.icon:'idle';
+  $('icon-state').textContent=icons[icon];updateAiPreview(icon);
   document.querySelectorAll('[data-export]').forEach(b=>b.disabled=!auth||busy);
   if(snapshot?.recentEvents){$('events').replaceChildren(...snapshot.recentEvents.map(e=>{const li=document.createElement('li'),time=document.createElement('time'),span=document.createElement('span');time.textContent=new Date(e.server_time).toLocaleTimeString('ko-KR',{hour12:false});let payload;try{payload=JSON.parse(e.payload);}catch{payload={};}span.textContent=(eventLabels[e.type]||e.type)+(payload.clip?' · '+({chime:'AI 발화 전 알림음',dialogue:'동승자 대화',prompt:'제안 질문',answer:'최종 답변'}[payload.clip]||payload.clip):'')+(payload.icon?' · '+icons[payload.icon]:'')+(e.type==='note'?' · '+payload.note:'')+(['cue_touch','reactive_touch'].includes(e.type)?` · ${payload.accepted?'수락':'지연 기록'} · ${Math.round(payload.reactionMs)} ms`:'');li.append(time,span);return li;}));}
 }
