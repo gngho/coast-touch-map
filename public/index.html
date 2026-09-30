@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="./vendor/maplibre-gl.css">
   <link rel="stylesheet" href="./app.css">
   <link rel="stylesheet" href="./ai.css">
+  <link rel="stylesheet" href="./workspace.css">
   <script src="./vendor/maplibre-gl.js" defer></script>
   <script type="module" src="./app.js"></script>
 </head>
@@ -33,12 +34,14 @@
       <div class="place"><span class="coast-mark" aria-label="Coast">C<span aria-hidden="true">↗</span></span></div>
       <time id="clock" aria-label="현재 시각"></time>
     </header>
-    <main class="map-area" aria-label="해안 지도">
-      <div id="map" aria-label="캘리포니아 해안 터치 지도"></div>
+    <main class="workspace" aria-label="AI와 내비게이션">
+      <section class="ai-area" aria-label="AI 어시스턴트">
+        <div class="ai-area-heading"><span>AI ASSISTANT</span><h1>Coast AI</h1></div>
       <div id="ai-widget" class="ai-widget" data-state="idle">
         <button id="ai-toggle" class="ai-toggle" aria-label="AI 대기 · 상태 미리보기" aria-expanded="false" aria-controls="ai-panel">
           <span class="ai-sparkles" aria-hidden="true">✦</span>
           <span class="ai-ring" aria-hidden="true"></span>
+          <canvas id="ai-canvas" class="ai-canvas" width="400" height="400" aria-hidden="true" hidden></canvas>
           <img class="ai-symbol" src="./icons/gemini-astroid.svg" width="96" height="96" alt="" draggable="false">
           <span id="ai-state-label" class="ai-state-label" aria-live="polite">대기</span>
         </button>
@@ -55,18 +58,20 @@
           <p>음성 연결 없이 움직임을 미리 볼 수 있어요.</p>
         </section>
       </div>
+
+      </section>
+      <section class="map-area" aria-label="해안 지도">
+      <div id="map" aria-label="캘리포니아 해안 터치 지도"></div>
       <div class="north" aria-label="북쪽 위"><span>N</span><span class="north-needle"></span></div>
       <div class="map-controls" aria-label="지도 조작">
         <div class="zoom-group"><button id="zoom-in" class="icon-button" aria-label="확대"><svg><use href="#i-plus"/></svg></button><span></span><button id="zoom-out" class="icon-button" aria-label="축소"><svg><use href="#i-minus"/></svg></button></div>
         <button id="reset-view" class="icon-button home-button" aria-label="처음 위치로 돌아가기"><svg><use href="#i-home"/></svg></button>
+        <nav aria-label="주 메뉴"><div class="dock-actions"><button id="map-tab" class="dock-button selected" aria-current="page"><svg><use href="#i-map"/></svg><span>지도</span></button><button id="settings-open" class="dock-button" aria-haspopup="dialog"><svg><use href="#i-settings"/></svg><span>설정</span></button></div></nav>
       </div>
       <div id="map-status" class="map-status" role="status"><span id="status-text">지도를 불러오는 중…</span><button id="retry" hidden>다시 시도</button></div>
+      </section>
     </main>
-    <nav class="dock" aria-label="주 메뉴">
-      <span class="dock-brand" aria-hidden="true">coast<span> .</span></span>
-      <div class="dock-actions"><button id="map-tab" class="dock-button selected" aria-current="page"><svg><use href="#i-map"/></svg><span>지도</span></button><button id="settings-open" class="dock-button" aria-haspopup="dialog"><svg><use href="#i-settings"/></svg><span>설정</span></button></div>
-      <span class="dock-detail" aria-hidden="true">PACIFIC COAST<br><b>36°22′ N · 121°54′ W</b></span>
-    </nav>
+
   </div>
   <dialog id="settings" aria-labelledby="settings-title">
     <div class="settings-header"><div><p class="eyebrow">PREFERENCES</p><h2 id="settings-title">지도 설정</h2></div><button id="settings-close" class="icon-button" aria-label="설정 닫기"><svg><use href="#i-close"/></svg></button></div>

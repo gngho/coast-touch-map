@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><title>Coast · WebGL AI 시안</title><link rel="stylesheet" href="styles.css"></head>
+<body><main>
+  <header><div><span class="eyebrow">COAST / DESIGN STUDY 03</span><h1>빛이 흐르고, 형태가 살아 움직이다.</h1><p>다섯 겹의 입체 리본 · 실시간 WebGL 모션 시안</p></div><span class="badge">LIVE WEBGL</span></header>
+  <section class="workspace" aria-label="차량 화면 배치 시안">
+    <div class="map"><div class="sea"></div><svg class="route" viewBox="0 0 1000 480" preserveAspectRatio="none" aria-hidden="true"><path d="M720 -30C610 80 760 160 574 242S519 364 344 510" stroke="#fff" stroke-width="15" fill="none"/><path d="M720 -30C610 80 760 160 574 242S519 364 344 510" stroke="#4782EF" stroke-width="6" fill="none"/></svg><span class="map-label ocean">PACIFIC OCEAN</span><span class="map-label town">Big Sur</span><div class="trip"><b>Coast</b><span>해안 드라이브</span><strong>13:35</strong></div><span class="car">▲</span><div class="map-controls" aria-label="배치 확인용 지도 도구"><span>＋</span><span>−</span><span>⌂</span><span>지도</span><span>설정</span></div></div>
+    <div class="dock"><span class="dock-caption">COAST<br><small>YOUR AI COMPANION</small></span><button id="hero" class="ai" data-state="idle" type="button" aria-label="AI 대기 중"><span class="orb-slot"></span><span class="copy"><strong id="state-label">대기 중</strong><span id="state-hint">필요할 때 터치해 주세요</span></span></button><span class="dock-detail">AI ASSISTANT<br><small>상시 표시</small></span></div>
+  </section>
+  <section class="toolbar" aria-label="상태 선택"><div id="states"></div><button id="sequence" type="button">Cue 흐름 재생</button></section>
+  <p id="description" class="description" aria-live="polite"></p>
+  <section id="comparison" class="comparison" aria-label="다섯 상태 비교"></section>
+  <footer>시각·동작 검토용 시안입니다. Speaking은 예시 맥동이며 음성 분석에 연결되어 있지 않습니다. 지도 도구는 배치 예시입니다.</footer>
+</main><script type="module" src="preview.js"></script></body></html>

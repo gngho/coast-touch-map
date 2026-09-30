@@ -1,6 +1,6 @@
 # Coast — 차량 AI 상호작용 실험
 
-iPad 참가자용 내비게이션 자극과 PC 진행자용 관리자 화면을 포함한 연구용 웹앱입니다. 현재 화면·서버 버전은 **2.6.0**입니다. package.json의 2.0.0은 초기 패키지 버전입니다.
+iPad 참가자용 내비게이션 자극과 PC 진행자용 관리자 화면을 포함한 연구용 웹앱입니다. 현재 화면·서버 버전은 **2.7.0**입니다. package.json의 2.0.0은 초기 패키지 버전입니다.
 
 ## 포함된 기능
 
@@ -18,7 +18,7 @@ iPad 참가자용 내비게이션 자극과 PC 진행자용 관리자 화면을 
 - [참가자 화면 · iPad](https://coast-touch-map.rudgh0862.workers.dev/)
 - [관리자 화면 · PC](https://coast-touch-map.rudgh0862.workers.dev/admin)
 
-두 기기 모두 위 Cloudflare 주소를 사용하고 허용된 계정으로 로그인합니다. 현재 관리자 버전은 **2.6.0**입니다. GitHub `main`에 반영한 변경은 Cloudflare Workers Builds를 통해 자동 배포됩니다.
+두 기기 모두 위 Cloudflare 주소를 사용하고 허용된 계정으로 로그인합니다. 현재 관리자 버전은 **2.7.0**입니다. GitHub `main`에 반영한 변경은 Cloudflare Workers Builds를 통해 자동 배포됩니다.
 
 이전 `chatgpt.site` 주소는 별도 배포본이며 현재 변경이 반영되지 않습니다. 기존 즐겨찾기는 위 주소로 교체하세요.
 

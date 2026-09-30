@@ -1,10 +1,25 @@
-// Visual state preview only. No microphone, audio, or network connection.
+import {GlassRenderer} from './ai-renderer.js';
+// Visual rendering only. State and accepted-touch timing remain experiment-owned.
 export function initializeAiWidget({onTouch = () => {}} = {}) {
   let experiment = false;
   const widget = document.getElementById('ai-widget');
   const toggle = document.getElementById('ai-toggle');
   const panel = document.getElementById('ai-panel');
   const label = document.getElementById('ai-state-label');
+  const canvas = document.getElementById('ai-canvas');
+  let renderer;
+  if (canvas) {
+    try {
+      renderer = new GlassRenderer([{canvas, state: widget.dataset.state || 'idle'}]);
+      canvas.hidden = false;
+      widget.dataset.renderer = 'webgl';
+      window.addEventListener('pagehide', () => renderer.dispose(), {once: true});
+      window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
+    } catch (error) {
+      // Retain the visible SVG and existing state/touch controls if WebGL is unavailable.
+      console.warn('AI WebGL unavailable; using SVG fallback.', error);
+    }
+  }
   const choices = [...panel.querySelectorAll('[data-ai-state]')];
   const labels = {idle: '대기', twinkle: '정보 제공 가능', listening: '듣는 중', thinking: '생각 중', speaking: '말하는 중'};
   let press=null;
@@ -36,6 +51,7 @@ export function initializeAiWidget({onTouch = () => {}} = {}) {
     button.addEventListener('click', () => {
       const state = button.dataset.aiState;
       widget.dataset.state = state;
+      renderer?.setState(state);
       label.textContent = labels[state];
       toggle.setAttribute('aria-label', `AI ${labels[state]} · 상태 미리보기`);
       for (const choice of choices) choice.setAttribute('aria-pressed', String(choice === button));
@@ -68,6 +84,7 @@ export function initializeAiWidget({onTouch = () => {}} = {}) {
     setVisible() { widget.hidden=false; },
     setTouchEnabled(value) { if(!value)press=null;toggle.disabled=!value;toggle.setAttribute('aria-disabled',String(!value)); },
     setState(state) {
+      renderer?.setState(state);
       widget.dataset.state=state;label.textContent=labels[state];
       toggle.setAttribute('aria-label',experiment?`AI ${labels[state]}${state==='twinkle'?' · 터치하여 정보 받기':''}`:`AI ${labels[state]} · 상태 미리보기`);
       for (const choice of choices) choice.setAttribute('aria-pressed',String(choice.dataset.aiState===state));

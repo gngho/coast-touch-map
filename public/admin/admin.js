@@ -6,7 +6,7 @@ import {initReports} from './reports.js';
 import {initSchedules} from './schedules.js';
 import {connectionHealth} from '/connection.js';
 const $=id=>document.getElementById(id);
-const UI_VERSION='2.6.0';
+const UI_VERSION='2.7.0';
 const relations={friend:'친구',partner:'연인',coworker:'직장동료'},methods={reactive:'Reactive',cue:'Proactive cue',suggestion:'Proactive suggestion',direct:'Proactive direct'};
 const icons={idle:'Idle',twinkle:'Twinkle',listening:'Listening',thinking:'Thinking',speaking:'Speaking'};
 const statuses={prepared:'준비 완료',running:'진행 중',ended:'종료',aborted:'중단'};

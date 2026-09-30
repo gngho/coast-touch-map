@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <defs>
+    <radialGradient id="body"><stop stop-color="#122947" stop-opacity=".22"/><stop offset=".72" stop-color="#16192F" stop-opacity=".45"/><stop offset="1" stop-color="#8DADFF" stop-opacity=".3"/></radialGradient>
+    <linearGradient id="rim" x1="36" y1="30" x2="198" y2="216" gradientUnits="userSpaceOnUse"><stop stop-color="#ADFAFF"/><stop offset=".32" stop-color="#5288FF"/><stop offset=".65" stop-color="#C797FF"/><stop offset="1" stop-color="#FFAFD8"/></linearGradient>
+    <linearGradient id="flow" x1="40" y1="75" x2="194" y2="170" gradientUnits="userSpaceOnUse"><stop stop-color="#39D8FA"/><stop offset=".48" stop-color="#6D8CFF"/><stop offset="1" stop-color="#FF70BB"/></linearGradient>
+    <radialGradient id="shine"><stop stop-color="#D2F9FF" stop-opacity=".7"/><stop offset="1" stop-color="#B4E7FF" stop-opacity="0"/></radialGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="8"/></filter>
+    <filter id="soft"><feGaussianBlur stdDeviation="2"/></filter>
+    <clipPath id="clip"><circle cx="120" cy="120" r="88"/></clipPath>
+  </defs>
+  <g class="orb-shell">
+    <circle class="halo" cx="120" cy="120" r="89" stroke="url(#rim)" stroke-width="9" opacity=".45" filter="url(#blur)"/>
+    <circle cx="120" cy="120" r="88" fill="url(#body)" stroke="url(#rim)" stroke-width="1.7"/>
+    <g clip-path="url(#clip)">
+      <g class="orb-fluid">
+        <path d="M29 138C51 49 104 40 153 78S205 153 219 96C211 182 166 205 114 164S54 91 29 138Z" fill="url(#flow)" opacity=".7" filter="url(#blur)"/>
+        <path d="M34 137C72 58 104 65 139 95S186 159 211 106C186 190 153 182 122 137S65 91 34 137Z" fill="url(#flow)" opacity=".52"/>
+        <path d="M38 145C62 71 91 70 119 103S160 187 201 127" stroke="url(#rim)" stroke-width="2" opacity=".9"/>
+        <path d="M42 101C89 43 120 161 163 163S195 111 202 101" stroke="url(#flow)" stroke-width="7" opacity=".6" filter="url(#soft)"/>
+      </g>
+      <ellipse cx="91" cy="58" rx="61" ry="30" fill="url(#shine)" transform="rotate(-27 91 58)"/>
+    </g>
+    <path d="M48 97A77 77 0 0 1 100 46" stroke="#E1FFFF" stroke-width="2.5" stroke-linecap="round" opacity=".8"/>
+    <path d="M151 195A79 79 0 0 0 192 153" stroke="#FFD1F0" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+  </g>
+  <g class="orb-orbit"><path d="M120 24A96 96 0 0 1 211 90" stroke="url(#rim)" stroke-width="2.5" stroke-linecap="round"/><circle cx="211" cy="90" r="3" fill="#DAF9FF"/></g>
+  <g class="orb-stars" fill="#FFF1CD"><path d="m194 37 3 10 10 3-10 3-3 10-3-10-10-3 10-3Z"/><path d="m43 163 2 7 7 2-7 2-2 7-2-7-7-2 7-2Z"/></g>
+</svg>
