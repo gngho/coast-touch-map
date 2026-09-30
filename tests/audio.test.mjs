@@ -5,7 +5,7 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(intervention,options={}){
   const commands=[],events=[],clips=[],waits=[];
   const snapshot={state:{trial:{id:'trial',status:'running',intervention},suspended:false,touched:false}};
-  const flow=new AudioFlow({claim:async run=>{snapshot.state.audioRun={id:run.id,status:'running'};},command:async (action,data)=>{assert.equal(data.runId,snapshot.state.audioRun.id);assert.equal(data.trialId,'trial');commands.push([action,data.icon]);if(['show_cue','arm_reactive'].includes(action))snapshot.state.cueId='armed';},play:async (asset,started)=>{clips.push(asset.meta.name);await started();},chime:async started=>started({name:'ai-chime-v1',duration:.32}),stop:()=>{},log:async (type,detail)=>events.push({type,detail}),changed:()=>{},now:()=>0,wait:async ms=>waits.push(ms),...options});
+  const flow=new AudioFlow({claim:async run=>{snapshot.state.audioRun={id:run.id,status:'running'};},command:async (action,data)=>{assert.equal(data.runId,snapshot.state.audioRun.id);assert.equal(data.trialId,'trial');commands.push([action,data.icon]);if(['show_cue','arm_reactive'].includes(action))snapshot.state.cueId='armed';},play:async (asset,started)=>{clips.push(asset.meta.name);await started();},chime:async started=>started({name:'ai-chime-v3',duration:.5}),stop:()=>{},log:async (type,detail)=>events.push({type,detail}),changed:()=>{},now:()=>0,wait:async ms=>waits.push(ms),...options});
   flow.update(snapshot,true);
   const begin=()=>flow.begin({trial:snapshot.state.trial,assets:Object.fromEntries(['dialogue','prompt','answer'].map(k=>[k,{meta:{name:k}}])),delayMs:1000,pageId:'page'});
   return {flow,snapshot,commands,events,clips,waits,begin};
@@ -102,7 +102,7 @@ test('late claim completion cannot stop or log against a newer run',async()=>{
 
 test('each AI utterance has one completed chime before voice; human dialogue has none',async()=>{
   for(const mode of ['reactive','cue','suggestion','direct']){
-    const order=[];const f=fixture(mode,{chime:async started=>{order.push('chime');await started({name:'ai-chime-v1',duration:.32});},play:async(asset,started)=>{order.push(asset.meta.name);await started();}});
+    const order=[];const f=fixture(mode,{chime:async started=>{order.push('chime');await started({name:'ai-chime-v3',duration:.5});},play:async(asset,started)=>{order.push(asset.meta.name);await started();}});
     await f.begin();
     if(['reactive','cue'].includes(mode)){touch(f);f.flow.update(f.snapshot,true);}
     if(['reactive','suggestion'].includes(mode))await f.flow.confirm('button');
