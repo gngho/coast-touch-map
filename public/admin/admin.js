@@ -8,7 +8,7 @@ import {connectionHealth} from '/connection.js';
 import {initializeAiPreview} from './ai-preview.js';
 const $=id=>document.getElementById(id);
 const updateAiPreview=initializeAiPreview($('preview-icon'));
-const UI_VERSION='2.9.3';
+const UI_VERSION='2.9.4';
 const relations={friend:'FR · 친구',partner:'연인 (이전 배정)',coworker:'BU · 직장 관계'},methods={reactive:'RA',cue:'PC',suggestion:'PS',direct:'PD'};
 const icons={idle:'Idle',twinkle:'Twinkle',listening:'Listening',thinking:'Thinking',speaking:'Speaking'};
 const statuses={prepared:'준비 완료',running:'진행 중',ended:'종료',aborted:'중단'};

@@ -1,5 +1,5 @@
 import {validateConfig} from '../public/admin/schedule-model.js';
-export const VERSION = '2.9.3';
+export const VERSION = '2.9.4';
 export const RELATIONSHIPS = ['friend','partner','coworker'];
 export const INTERVENTIONS = ['reactive','cue','suggestion','direct'];
 export class Problem extends Error { constructor(message,status=400){super(message);this.status=status;} }
