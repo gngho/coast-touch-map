@@ -1,5 +1,5 @@
 .dot-ai{position:relative;display:block;width:min(100%,300px);aspect-ratio:1;flex:none;pointer-events:none;color:#f5f8ff}
-.dot-orbit{position:absolute;inset:0}
+.dot-orbit,.dot-bounce-group{position:absolute;inset:0}
 .ai-dot{position:absolute;width:12%;height:12%;left:calc(20% + var(--i)*20%);top:50%;transform:translate(-50%,-50%);border-radius:999px;background:currentColor}
 .dot-ai[data-state="listening"] .ai-dot{animation:dot-bounce 1.4s ease-in-out infinite;animation-delay:calc(var(--i)*.18s)}
 .dot-ai:is([data-state="thinking"],[data-state="twinkle"]) .dot-orbit{animation:dot-clockwise 2.8s linear infinite}
@@ -11,7 +11,18 @@
 @keyframes dot-bounce{0%,60%,100%{transform:translate(-50%,-50%)}30%{transform:translate(-50%,-130%)}}
 @keyframes dot-clockwise{to{transform:rotate(360deg)}}
 @keyframes dot-speak{0%,100%{height:18%}25%{height:48%}50%{height:28%}75%{height:60%}}
-.ai-area:has([data-state="twinkle"])::after{content:"";position:absolute;inset:2px;border-radius:26px;border:3px solid #d9ecff;box-shadow:inset 0 0 18px 5px #99caff,inset 0 0 55px 8px #7c8dff,0 0 12px #cceaff;pointer-events:none;animation:panel-glow 2.4s ease-in-out infinite}
+.ai-area:has([data-state="twinkle"])::after{content:"";position:absolute;inset:2px;z-index:0;border-radius:26px;border:3px solid #e8f4ff;background:linear-gradient(90deg,#9dc8ff40,transparent 46%,transparent 54%,#9dc8ff40);box-shadow:inset 0 0 28px 8px #b6dcff,inset 0 0 85px 24px #8eaeff,inset 0 0 160px 42px #7987ffc0,0 0 12px #cceaff;pointer-events:none;animation:panel-glow 2.4s ease-in-out infinite}
+.ai-area .ai-widget,.ai-area-heading{z-index:1}
+.ai-area .ai-state-label,.icon-preview #icon-state{display:none!important}
+.dot-ai[data-state="twinkle"] .dot-bounce-group{animation:dot-cue-bounce 4.8s ease-in-out infinite}
+.dot-ai[data-state="twinkle"] .dot-orbit{animation-duration:4.8s}
+.dot-ai[data-state="twinkle"] .ai-dot:nth-child(1){--x:50%;--y:20%;--cx:50%;--cy:41%}
+.dot-ai[data-state="twinkle"] .ai-dot:nth-child(2){--x:80%;--y:50%;--cx:59%;--cy:50%}
+.dot-ai[data-state="twinkle"] .ai-dot:nth-child(3){--x:50%;--y:80%;--cx:50%;--cy:59%}
+.dot-ai[data-state="twinkle"] .ai-dot:nth-child(4){--x:20%;--y:50%;--cx:41%;--cy:50%}
+.dot-ai[data-state="twinkle"] .ai-dot{animation:dot-cue-gather 4.8s ease-in-out infinite}
+@keyframes dot-cue-bounce{0%,26%,48%,68%,85%,100%{transform:translateY(0)}14%{transform:translateY(-10%)}37%{transform:translateY(-3%)}59%{transform:translateY(-8%)}77%{transform:translateY(-4%)}}
+@keyframes dot-cue-gather{0%,24%,75%,100%{left:var(--x);top:var(--y);transform:translate(-50%,-50%) scale(1)}42%,50%{left:var(--cx);top:var(--cy);transform:translate(-50%,-50%) scale(.9)}63%{left:var(--x);top:var(--y);transform:translate(-50%,-50%) scale(1.12)}}
 @keyframes panel-glow{0%,100%{opacity:.72}50%{opacity:1}}
 .ai-area .ai-offer{position:relative!important;inset:auto!important;min-height:0!important;margin:24px 18px 0!important;padding:14px 17px!important;border-radius:18px!important;background:#f5f8ff!important;color:#253558!important;font-size:clamp(12px,1.5vw,17px)!important;font-weight:600;max-width:calc(100% - 36px)}
 .ai-area .ai-offer::before{content:"";position:absolute;top:-9px;left:calc(50% - 9px);border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:10px solid #f5f8ff}
