@@ -11,9 +11,12 @@ export function initializeDotAi(host) {
     // Fixed positions keep the visual consistent between participants.
     let seed = 4173;
     const random = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
-    stars.innerHTML = Array.from({length:128}, (_, i) => {
-      const x = random() * 100;
-      const y = i < 92 ? 78 - x * .56 + (random() + random() - 1) * 32 : random() * 100;
+    stars.innerHTML = Array.from({length:80}, (_, i) => {
+      const along = 4 + random() * 92;
+      const inset = 1.5 + random() * 5;
+      const side = i % 4;
+      const x = side === 0 ? inset : side === 1 ? 100 - inset : along;
+      const y = side === 2 ? inset : side === 3 ? 100 - inset : along;
       const size = 1 + random() * 1.8;
       return `<i style="left:${x.toFixed(2)}%;top:${y.toFixed(2)}%;--star-size:${size.toFixed(2)}px;--star-time:${(2.4 + random() * 3).toFixed(2)}s;--star-delay:-${(random() * 6).toFixed(2)}s"></i>`;
     }).join('');
