@@ -11,7 +11,7 @@ export function createCoastMap({labels,onStatus,onZoom}){
       map.touchZoomRotate.disableRotation();map.keyboard.disableRotation();
       map.addControl(new maplibregl.ScaleControl({maxWidth:100,unit:'metric'}),'bottom-left');
       map.addControl(new maplibregl.AttributionControl({compact:false}),'bottom-right');
-      map.on('style.load',()=>{vehicle=addDemoRoute(map);setLabels(showLabels);});
+      map.on('style.load',()=>{vehicle?.remove();vehicle=addDemoRoute(map);setLabels(showLabels);});
       map.on('load',()=>{clearTimeout(timeout);onStatus('ready');});
       map.on('idle',()=>{if(map.areTilesLoaded()&&navigator.onLine){clearTimeout(timeout);onStatus('ready');}});
       map.on('error',()=>onStatus('error'));
@@ -23,5 +23,5 @@ export function createCoastMap({labels,onStatus,onZoom}){
   const offline=()=>onStatus('error');
   window.addEventListener('offline',offline);
   initialize();
-  return{zoomBy(amount){if(map)map.zoomTo(Math.max(5,Math.min(18,map.getZoom()+amount)),{duration:reduced?0:250});},reset(){map?.easeTo({...INITIAL_VIEW,duration:reduced?0:650});},setLabels,retry(){if(!disposed)initialize();},destroy(){disposed=true;clearTimeout(timeout);vehicle?.remove();map?.remove();window.removeEventListener('offline',offline);}};
+  return{zoomBy(amount){if(map)map.zoomTo(Math.max(5,Math.min(18,map.getZoom()+amount)),{duration:reduced?0:250});},reset(){vehicle?.reset();map?.easeTo({...INITIAL_VIEW,duration:reduced?0:650});},setLabels,retry(){if(!disposed)initialize();},destroy(){disposed=true;clearTimeout(timeout);vehicle?.remove();map?.remove();window.removeEventListener('offline',offline);}};
 }

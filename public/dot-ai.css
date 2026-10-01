@@ -1,0 +1,20 @@
+.dot-ai{position:relative;display:block;width:min(100%,300px);aspect-ratio:1;flex:none;pointer-events:none;color:#f5f8ff}
+.dot-orbit{position:absolute;inset:0}
+.ai-dot{position:absolute;width:12%;height:12%;left:calc(20% + var(--i)*20%);top:50%;transform:translate(-50%,-50%);border-radius:999px;background:currentColor}
+.dot-ai[data-state="listening"] .ai-dot{animation:dot-bounce 1.4s ease-in-out infinite;animation-delay:calc(var(--i)*.18s)}
+.dot-ai:is([data-state="thinking"],[data-state="twinkle"]) .dot-orbit{animation:dot-clockwise 2.8s linear infinite}
+.dot-ai:is([data-state="thinking"],[data-state="twinkle"]) .ai-dot:nth-child(1){left:50%;top:20%}
+.dot-ai:is([data-state="thinking"],[data-state="twinkle"]) .ai-dot:nth-child(2){left:80%;top:50%}
+.dot-ai:is([data-state="thinking"],[data-state="twinkle"]) .ai-dot:nth-child(3){left:50%;top:80%}
+.dot-ai:is([data-state="thinking"],[data-state="twinkle"]) .ai-dot:nth-child(4){left:20%;top:50%}
+.dot-ai[data-state="speaking"] .ai-dot{height:24%;animation:dot-speak 1.15s ease-in-out infinite;animation-delay:calc(var(--i)*-.23s)}
+@keyframes dot-bounce{0%,60%,100%{transform:translate(-50%,-50%)}30%{transform:translate(-50%,-130%)}}
+@keyframes dot-clockwise{to{transform:rotate(360deg)}}
+@keyframes dot-speak{0%,100%{height:18%}25%{height:48%}50%{height:28%}75%{height:60%}}
+.ai-area:has([data-state="twinkle"])::after{content:"";position:absolute;inset:2px;border-radius:26px;border:3px solid #d9ecff;box-shadow:inset 0 0 18px 5px #99caff,inset 0 0 55px 8px #7c8dff,0 0 12px #cceaff;pointer-events:none;animation:panel-glow 2.4s ease-in-out infinite}
+@keyframes panel-glow{0%,100%{opacity:.72}50%{opacity:1}}
+.ai-area .ai-offer{position:relative!important;inset:auto!important;min-height:0!important;margin:24px 18px 0!important;padding:14px 17px!important;border-radius:18px!important;background:#f5f8ff!important;color:#253558!important;font-size:clamp(12px,1.5vw,17px)!important;font-weight:600;max-width:calc(100% - 36px)}
+.ai-area .ai-offer::before{content:"";position:absolute;top:-9px;left:calc(50% - 9px);border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:10px solid #f5f8ff}
+.icon-preview:has([data-state="twinkle"]){box-shadow:inset 0 0 12px #9acbff,0 0 9px #93bfff}
+.icon-preview #preview-icon.dot-ai{width:104px;height:104px}
+@media(prefers-reduced-motion:reduce){.dot-ai *,.ai-area::after{animation:none!important}.dot-ai[data-state="speaking"] .ai-dot:nth-child(2){height:60%}.dot-ai[data-state="speaking"] .ai-dot:nth-child(3){height:40%}}
