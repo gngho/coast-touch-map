@@ -57,6 +57,33 @@ test('saved Latin schedules enforce sequence, ownership, retries, condition inte
   }finally{f.close();}
 });
 
+test('manual allocation selection preserves attempts and survey progress, validates scope and blocks unsafe preparation',async()=>{
+ const f=await fixture();try{
+  const id=uid();await f.command('create_schedule',{config:{design:DESIGN,seed:'manual',participants:['P001']}},id);
+  const read=async()=>(await f.call(f.path('schedule'),{auth:f.admin})).result.plans[0].participants[0];
+  const steps=(await read()).steps;
+  const data=(position,manual=false)=>{const s=steps[position-1];return {participant:'P001',relationship:s.relationship,intervention:s.intervention,scenario:s.scenario,schedule:{planId:id,position,...(manual?{selection:'manual',reason:'iPad 연결 오류'}:{})}};};
+  for(const position of [1,2]){assert.equal((await f.command('prepare',data(position))).status,200);await f.apply();await f.command('start');await f.command('end');}
+  await f.command('complete_survey',{planId:id,participant:'P001',blockPosition:1});
+  const before=await read(),oldId=before.steps[0].attempts[0].id;
+  assert.equal((await f.command('prepare',data(1))).status,409);
+  assert.equal((await f.command('prepare',{...data(1,true),scenario:'wrong'})).status,409);
+  assert.equal((await f.command('prepare',{...data(1,true),schedule:{planId:id,position:99,selection:'manual'}})).status,409);
+  const eventId=uid();assert.equal((await f.command('prepare',data(1,true),eventId)).status,200);
+  assert.equal((await f.command('prepare',data(1,true),eventId)).status,200);
+  assert.deepEqual(f.state.trial.schedule.previousAttemptIds,[oldId]);assert.equal(f.state.trial.schedule.expectedNextPosition,3);
+  assert.equal((await f.command('prepare',data(3,true))).status,409);
+  await f.apply();await f.command('start');await f.command('end');
+  let person=await read();assert.equal(person.completed,2);assert.equal(person.completedBlocks,1);assert.equal(person.nextPosition,3);
+  assert.equal(person.steps[0].attempts.length,2);assert.equal(person.steps[0].attempts[1].reason,'iPad 연결 오류');
+  assert.equal(person.blocks[0].surveyAt,before.blocks[0].surveyAt);
+  assert.equal((await f.command('prepare',data(8,true))).status,200);await f.command('abort');
+  person=await read();assert.equal(person.nextPosition,3);assert.equal(person.steps[7].status,'retry');
+  await f.DB.prepare('UPDATE sessions SET device_seen=0 WHERE id=?').bind(f.admin.id).run();
+  assert.equal((await f.command('prepare',data(1,true))).status,409);
+ }finally{f.close();}
+});
+
 test('Latin schedule creation works without an iPad, validates input and logs no previous trial ownership',async()=>{
   const f=await fixture();try{
     await f.start();await f.command('end');await f.command('unpair');
