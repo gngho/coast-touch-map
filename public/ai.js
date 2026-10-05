@@ -4,6 +4,7 @@ export function initializeAiWidget({onTouch = () => {}} = {}) {
   let experiment = false;
   const widget = document.getElementById('ai-widget');
   const toggle = document.getElementById('ai-toggle');
+  const touchArea = widget.closest('.ai-area') || widget;
   const panel = document.getElementById('ai-panel');
   const label = document.getElementById('ai-state-label');
   const updateDots=initializeDotAi(document.getElementById('ai-dots'));
@@ -11,12 +12,15 @@ export function initializeAiWidget({onTouch = () => {}} = {}) {
   const choices = [...panel.querySelectorAll('[data-ai-state]')];
   const labels = {idle: '대기', twinkle: '정보 제공 가능', listening: '듣는 중', thinking: '생각 중', speaking: '말하는 중'};
   let press=null;
-  toggle.addEventListener('pointerdown',event=>{
+  touchArea.addEventListener('pointerdown',event=>{
     press=experiment&&!toggle.disabled&&event.isTrusted&&event.isPrimary!==false&&event.button===0?{id:event.pointerId,x:event.clientX,y:event.clientY}:null;
   });
-  toggle.addEventListener('pointercancel',()=>{press=null;});
-  toggle.addEventListener('pointerup',event=>{
-    const valid=press&&press.id===event.pointerId&&event.isTrusted&&!toggle.disabled&&Math.hypot(event.clientX-press.x,event.clientY-press.y)<20;
+  touchArea.addEventListener('pointercancel',()=>{press=null;});
+  touchArea.addEventListener('pointerleave',()=>{press=null;});
+  touchArea.addEventListener('pointerup',event=>{
+    const bounds=touchArea.getBoundingClientRect();
+    const inside=event.clientX>=bounds.left&&event.clientX<=bounds.right&&event.clientY>=bounds.top&&event.clientY<=bounds.bottom;
+    const valid=press&&press.id===event.pointerId&&event.isTrusted&&!toggle.disabled&&inside&&Math.hypot(event.clientX-press.x,event.clientY-press.y)<20;
     press=null;
     if(experiment&&valid)onTouch();
   });
@@ -64,7 +68,7 @@ export function initializeAiWidget({onTouch = () => {}} = {}) {
   });
   return {
     setMode(value) {
-      if(experiment===value)return;experiment=value;widget.dataset.mode=value?'experiment':'setup';close();
+      if(experiment===value)return;press=null;experiment=value;widget.dataset.mode=value?'experiment':'setup';close();
       if(value){toggle.removeAttribute('aria-expanded');toggle.removeAttribute('aria-controls');}
       else{toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-controls','ai-panel');}
       toggle.setAttribute('aria-label',value?'AI 탐색 요청':`AI ${labels[widget.dataset.state]} · 상태 미리보기`);
