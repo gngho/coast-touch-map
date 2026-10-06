@@ -1,5 +1,6 @@
 import{addDemoRoute}from'./route.js';
-export const INITIAL_VIEW={center:[-121.901,36.371],zoom:14.5,bearing:0,pitch:55};
+// At the demo latitude and 55-degree follow view, the metric scale reads 100 m.
+export const INITIAL_VIEW={center:[-121.901,36.371],zoom:15.5,bearing:0,pitch:55};
 export function createCoastMap({labels,onStatus,onZoom}){
   let map,vehicle,timeout,showLabels=labels,disposed=false;
   const setLabels=value=>{showLabels=value;if(!map?.isStyleLoaded())return;for(const layer of map.getStyle().layers){if(layer.type==='symbol'&&layer.layout?.['text-field'])map.setLayoutProperty(layer.id,'visibility',value?'visible':'none');}};

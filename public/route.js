@@ -12,12 +12,12 @@ export function addDemoRoute(map){
   map.addLayer({id:'coast-route-casing',type:'line',source:'coast-route',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#ffffff','line-width':['+',width,4],'line-opacity':0.96}},before);
   map.addLayer({id:'coast-route-line',type:'line',source:'coast-route',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#2467e8','line-width':width}},before);
 
-  const a=coordinates[index+1],b=coordinates[index-1];
-  const heading=Math.atan2((b[0]-a[0])*Math.cos(a[1]*Math.PI/180),b[1]-a[1])*180/Math.PI;
   const element=document.createElement('div');
   element.className='vehicle-marker';element.setAttribute('role','img');element.setAttribute('aria-label','북쪽으로 진행하는 데모 위치');
   const icon=document.createElement('img');icon.src='./icons/navigation-arrow.svg';icon.alt='';icon.width=48;icon.height=48;icon.draggable=false;element.append(icon);
-  const marker=new maplibregl.Marker({element,rotation:heading,rotationAlignment:'map',pitchAlignment:'viewport',anchor:'center'}).setLngLat(coordinates[index]).addTo(map);
+  // Heading-up camera already turns the map. Keep the arrow upright in screen space
+  // and preserve fractional pixels rather than rounding its anchor every moveend.
+  const marker=new maplibregl.Marker({element,rotation:0,rotationAlignment:'viewport',pitchAlignment:'viewport',subpixelPositioning:true,anchor:'center'}).setLngLat(coordinates[index]).addTo(map);
   const path=coordinates.slice(0,index+1).reverse(),lengths=routeLengths(path);
   let travelled=0,last=null,frame=0,removed=false,cameraHeading=null;
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
@@ -28,10 +28,10 @@ export function addDemoRoute(map){
     const ahead=routePose(path,lengths,travelled+24).position;
     const direction=Math.atan2((ahead[0]-behind[0])*Math.cos(pose.position[1]*Math.PI/180),ahead[1]-behind[1])*180/Math.PI;
     cameraHeading=cameraHeading===null?direction:smoothHeading(cameraHeading,direction,dt);
-    marker.setLngLat(pose.position).setRotation(cameraHeading);
     // Padding keeps the car at 68% of the map height, exposing the road ahead.
     // Do not set zoom here: the participant's +/- and pinch zoom must persist.
     map.jumpTo({center:pose.position,bearing:cameraHeading,pitch:55,padding:{top:map.getContainer().clientHeight*.36,bottom:0,left:0,right:0}});
+    marker.setLngLat(pose.position);
     element.dataset.distance=travelled.toFixed(2);
   }
   function tick(now){

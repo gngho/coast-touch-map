@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {addDemoRoute,routeLengths,routePose,smoothHeading} from '../public/route.js';
+import {DEMO_ROUTE} from '../public/route-data.js';
 test('route marker interpolates on segments and clamps at endpoints',()=>{
  const points=[[0,0],[0,.001],[.001,.001]],lengths=routeLengths(points);
  assert.deepEqual(routePose(points,lengths,0).position,points[0]);
@@ -20,7 +21,7 @@ test('camera heading crosses north along the short arc and is independent of fra
 });
 
 test('vehicle camera follows the entire drive, retains zoom, resets, and respects reduced motion',t=>{
- let callback,position,rotation,camera,removed=false,height=800;
+ let callback,position,markerOptions,camera,removed=false,height=800;
  const preference={matches:false};
  for(const key of ['document','matchMedia','requestAnimationFrame','cancelAnimationFrame','maplibregl']){
   const descriptor=Object.getOwnPropertyDescriptor(globalThis,key);
@@ -29,13 +30,16 @@ test('vehicle camera follows the entire drive, retains zoom, resets, and respect
  globalThis.document={hidden:false,createElement:()=>({setAttribute(){},append(){},dataset:{}})};
  globalThis.matchMedia=()=>preference;
  globalThis.requestAnimationFrame=fn=>{callback=fn;return 1;};globalThis.cancelAnimationFrame=()=>{};
- globalThis.maplibregl={Marker:class{setLngLat(p){position=p;return this;}setRotation(r){rotation=r;return this;}addTo(){return this;}remove(){removed=true;}}};
+ globalThis.maplibregl={Marker:class{constructor(options){markerOptions=options;}setLngLat(p){position=p;return this;}addTo(){return this;}remove(){removed=true;}}};
  const map={getStyle:()=>({layers:[]}),addSource(){},addLayer(){},getContainer:()=>({clientHeight:height}),jumpTo:c=>{camera=c;}};
  const route=addDemoRoute(map),start=[...position];
+ assert.equal(markerOptions.subpixelPositioning,true);
+ assert.equal(markerOptions.rotationAlignment,'viewport');
+ assert.equal(markerOptions.rotation,0);
  for(let i=0;i<6000;i++){
   callback(i*100);
   assert.deepEqual(camera.center,position);
-  assert.equal(camera.bearing,rotation);
+  assert.ok(Number.isFinite(camera.bearing));
   assert.equal(camera.pitch,55);
   assert.equal(camera.zoom,undefined);
  }
@@ -44,4 +48,14 @@ test('vehicle camera follows the entire drive, retains zoom, resets, and respect
  preference.matches=false;document.hidden=true;callback(600100);assert.deepEqual(position,stopped);
  document.hidden=false;height=600;route.reset();assert.deepEqual(position,start);assert.equal(camera.padding.top,216);
  route.remove();assert.equal(removed,true);
+});
+
+test('saved road geometry extends over 100 km with a continuous join and hours of forward travel',()=>{
+ const points=DEMO_ROUTE.geometry.coordinates,lengths=routeLengths(points);
+ assert.ok(lengths.at(-1)>100000);
+ assert.ok(Math.abs(lengths.at(-1)-DEMO_ROUTE.properties.distanceMeters)<1000);
+ let index=0,best=Infinity;
+ points.forEach((p,i)=>{const d=(p[0]+121.901)**2+(p[1]-36.371)**2;if(d<best){best=d;index=i;}});
+ assert.ok(lengths[index]>90000,'more than four hours of forward travel at 6 m/s');
+ for(let i=1;i<lengths.length;i++)assert.ok(lengths[i]-lengths[i-1]<1500,'no disconnected long jumps');
 });
