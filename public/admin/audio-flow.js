@@ -75,6 +75,13 @@ export class AudioFlow {
       if(!this.valid(epoch))return false;
       if(trial.intervention==='cue'){
         await this.control('show_cue',undefined,epoch);
+        if(!await this.awaitReady(epoch))return false;
+        // One sound per newly displayed cue, never per state poll. Keep a fast
+        // touch pending until this sound ends so two chimes cannot overlap.
+        this.set('cue_chime','정보 제공 가능 · 알림음');
+        await this.chime(asset=>this.emit('audio_started',{clip:'cue_chime',cueId:this.armedCueId,asset,clock:'pc_source_start_call'}));
+        if(!this.valid(epoch))return false;
+        this.emit('audio_ended',{clip:'cue_chime',cueId:this.armedCueId,clock:'pc_audio_ended_callback'});
         if(this.valid(epoch)){this.set('cue_wait','iPad의 Cue 터치를 기다립니다.');this.update(this.snapshot,this.connected,this.ready,this.diagnostics);}
       }else if(trial.intervention==='suggestion'){
         this.set('delay','대화 종료 · AI 제안 대기');

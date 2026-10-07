@@ -107,10 +107,33 @@ test('each AI utterance has one completed chime before voice; human dialogue has
     if(['reactive','cue'].includes(mode)){touch(f);f.flow.update(f.snapshot,true);}
     if(['reactive','suggestion'].includes(mode))await f.flow.confirm('button');
     await tick();assert.equal(f.flow.phase,'complete');
-    assert.deepEqual(order,mode==='suggestion'?['dialogue','chime','prompt','chime','answer']:['dialogue','chime','answer']);
+    assert.deepEqual(order,mode==='suggestion'?['dialogue','chime','prompt','chime','answer']:mode==='cue'?['dialogue','chime','chime','answer']:['dialogue','chime','answer']);
     const chimes=f.events.filter(e=>e.detail.clip==='chime');
     assert.deepEqual(chimes.map(e=>e.type),mode==='suggestion'?['audio_started','audio_ended','audio_started','audio_ended']:['audio_started','audio_ended']);
   }
+});
+
+test('Cue notification sounds once after display; early touch waits for it and cannot overlap the answer chime',async()=>{
+ let finish,count=0;const f=fixture('cue',{chime:async started=>{count++;await started({name:'ai-chime-v3',duration:.5});if(count===1)await new Promise(r=>finish=r);}});
+ const begin=f.begin();await tick();assert.equal(f.flow.phase,'cue_chime');assert.equal(count,1);
+ assert.ok(f.commands.some(c=>c[0]==='show_cue'));
+ touch(f);for(let i=0;i<10;i++)f.flow.update(f.snapshot,true);
+ assert.deepEqual(f.clips,['dialogue']);assert.equal(count,1);
+ finish();await begin;await tick();assert.equal(count,2);assert.equal(f.flow.phase,'complete');
+ assert.deepEqual(f.clips,['dialogue','answer']);
+ assert.deepEqual(f.events.filter(e=>e.detail.clip==='cue_chime').map(e=>e.type),['audio_started','audio_ended']);
+});
+
+test('Cue notification cancellation or failure cannot play an answer or replay after recovery',async()=>{
+ for(const reason of ['stop','disconnect','suspend','failure']){
+  let finish;const f=fixture('cue',{chime:()=>new Promise((resolve,reject)=>finish=reason==='failure'?()=>reject(Error('cue sound failed')):resolve)});
+  const begin=f.begin();await tick();assert.equal(f.flow.phase,'cue_chime');touch(f);
+  if(reason==='stop')f.flow.cancel();
+  if(reason==='disconnect')f.flow.update(f.snapshot,false);
+  if(reason==='suspend'){f.snapshot.state.suspended=true;f.flow.update(f.snapshot,true);}
+  finish();await begin;assert.deepEqual(f.clips,['dialogue']);assert.equal(f.flow.phase,reason==='failure'?'error':'stopped');
+  f.snapshot.state.suspended=false;f.flow.update(f.snapshot,true);assert.deepEqual(f.clips,['dialogue']);
+ }
 });
 
 test('stop or playback failure during chime never starts the following AI voice',async()=>{

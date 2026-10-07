@@ -285,7 +285,7 @@ test('all four flows start dialogue before Listening, require linked touch and r
         await f.refresh();
         const expected=asset.meta.name==='dialogue'?'idle':'speaking';
         assert.equal(f.state.icon,expected);clips.push(asset.meta.name);await started();
-      },chime:async started=>{assert.equal(f.state.icon,'speaking');await started({name:'ai-chime-v3',duration:.5});},stop(){},log:async type=>events.push(type),changed(){if(['complete','error','stopped'].includes(flow.phase))finish();},now:()=>0,wait:async ms=>waits.push(ms)});
+      },chime:async started=>{assert.equal(f.state.icon,flow.phase==='cue_chime'?'twinkle':'speaking');await started({name:'ai-chime-v3',duration:.5});},stop(){},log:async type=>events.push(type),changed(){if(['complete','error','stopped'].includes(flow.phase))finish();},now:()=>0,wait:async ms=>waits.push(ms)});
       await sync();const assets=Object.fromEntries(['dialogue','prompt','answer'].map(k=>[k,{meta:{name:k,duration:1,sha256:'a'.repeat(64)}}]));
       assert.equal(await flow.begin({trial:f.state.trial,assets,delayMs:1000,pageId:uid()}),true);
       if(['reactive','cue'].includes(intervention)){
