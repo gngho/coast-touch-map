@@ -1,4 +1,5 @@
 // Fixed stimuli only. No microphone, speech recognition, or generated answers.
+import {cueDelay} from '../cue-timing.js';
 export class AudioFlow {
   constructor({claim,command,play,chime,stop,log,changed,now=()=>performance.now(),wait=ms=>new Promise(r=>setTimeout(r,ms))}) {
     Object.assign(this,{claim,command,play,chime,stop,log,changed,wait,now});
@@ -37,6 +38,8 @@ export class AudioFlow {
     const result=await this.command(action,{...data,runId:this.run.id,trialId:this.run.trialId});
     const armed=['show_cue','arm_reactive'].includes(action);
     if(armed)this.armedCueId=result?.state?.cueId||this.snapshot?.state.cueId;
+    // Scheduled Cue onset must not wait for the post-render ACK round trip.
+    if(action==='show_cue'&&Number.isFinite(result?.state?.cueAt))return result;
     // Visual changes do not wait for audit uploads and a return ACK poll.
     if(!armed||!result?.state)return result;
     const generation=result.state.generation,deadline=performance.now()+10000;
@@ -74,7 +77,9 @@ export class AudioFlow {
       await this.clip('dialogue',epoch);
       if(!this.valid(epoch))return false;
       if(trial.intervention==='cue'){
-        await this.control('show_cue',undefined,epoch);
+        const cue=await this.control('show_cue',{synchronizeCue:true},epoch);
+        if(!this.valid(epoch))return false;
+        if(cue?.state?.cueAt)await this.wait(cueDelay(cue));
         if(!await this.awaitReady(epoch))return false;
         // One sound per newly displayed cue, never per state poll. Keep a fast
         // touch pending until this sound ends so two chimes cannot overlap.

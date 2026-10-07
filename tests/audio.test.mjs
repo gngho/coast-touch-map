@@ -136,6 +136,19 @@ test('Cue notification cancellation or failure cannot play an answer or replay a
  }
 });
 
+test('scheduled Cue chime waits for the common onset, not the visual ACK, and cancellation clears it',async()=>{
+ for(const cancel of [false,true]){
+  let release,chimes=0;
+  const f=fixture('cue',{wait:ms=>new Promise(r=>{assert.equal(ms,1200);release=r;}),chime:async started=>{chimes++;await started({duration:.5});}});
+  const original=f.flow.command;
+  f.flow.command=async(action,data)=>{await original(action,data);if(action==='show_cue'){assert.equal(data.synchronizeCue,true);return {state:{cueId:'armed',cueAt:2200,generation:3},serverTime:1000};}};
+  f.snapshot.applied=false;
+  const begin=f.begin();await tick();assert.equal(chimes,0);
+  if(cancel)f.flow.cancel();release();await begin;
+  assert.equal(chimes,cancel?0:1);assert.equal(f.flow.phase,cancel?'stopped':'cue_wait');
+ }
+});
+
 test('stop or playback failure during chime never starts the following AI voice',async()=>{
   for(const mode of ['direct','suggestion'])for(const fail of [false,true]){
     let finish;const f=fixture(mode,{chime:()=>new Promise((resolve,reject)=>finish=fail?()=>reject(Error('sound failed')):resolve)});

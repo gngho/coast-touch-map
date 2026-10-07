@@ -1,5 +1,6 @@
 import {request,endpoint} from '/sync.js';
-import {DESIGN,DESIGN_NOTE,CASE_LABELS,validateConfig,planProgress,designInfo,RELATION_CODES,METHOD_CODES,scenarioId} from './schedule-model.js';
+import {DESIGN,DESIGN_NOTE,CASE_LABELS,validateConfig,planProgress,designInfo,RELATION_CODES,METHOD_CODES} from './schedule-model.js';
+const scenarioId=step=>step.subtype||step.poi;
 import {escape,toCsv,kst,relationships,interventions} from './report-model.js';
 const poiLabels=CASE_LABELS,statusLabels={complete:'완료',active:'준비/진행 중',retry:'중단 · 재시도 필요',pending:'대기'};
 export function initSchedules({getAuth,getSnapshot,command,isBusy,isConnected}){
@@ -17,7 +18,7 @@ export function initSchedules({getAuth,getSnapshot,command,isBusy,isConnected}){
   function show(){const p=current(),person=selected();$('schedule-note').textContent=p?designInfo(p.config.design).note:DESIGN_NOTE;$('schedule-view').hidden=!p;
     if(!p||!person){$('schedule-table').replaceChildren();update();return;}
     $('schedule-info').textContent=`${preview?'저장 전 미리보기':'서버 저장됨'} · ${p.config.participants.length}명 · ${person.steps.length}회${person.blocks?`/설문 ${person.blocks.length}회`:""} · 시드 ${p.config.seed} · 참가자 배정 ${person.allocationIndex}번 · ${person.block}블록 / 행 ${person.row} / 사례 ${person.caseVariant}${p.config.participants.length%designInfo(p.config.design).cycle?' · 마지막 불완전 블록은 조건 순서 균형이 완성되지 않습니다.':''}`;
-    $('schedule-table').innerHTML=`<div class="report-table-wrap"><table class="report-table"><thead><tr>${['시나리오 순서 / 묶음','동승자','AI 개입 방식','시나리오 유형','시나리오 식별자','실제 시행 / 설문 상태','직접 선택'].map(s=>`<th scope="col">${s}</th>`).join('')}</tr></thead><tbody>${person.steps.map(s=>`<tr${s.position===person.nextPosition?' class="schedule-next-row"':''}><td>${s.position}${s.position===person.nextPosition?' · 다음':''}${s.blockPosition?`<small>묶음 ${s.blockPosition}/${person.blocks.length} · ${s.episodePosition}/2</small>`:''}</td><td>${RELATION_CODES[s.relationship]} · ${relationships[s.relationship]}</td><td>${METHOD_CODES[s.intervention]}</td><td>${s.family?`${s.family==='place'?'장소':'정보'} / `:''}${poiLabels[s.poi]}</td><td>${escape(scenarioId(s))}</td><td>${statusLabels[s.status]}<small>${s.attempts.map(a=>`시행 ${a.number}${a.selection==='manual'?' · 수동':''} (${({ended:'종료',aborted:'중단',prepared:'준비',running:'진행'})[a.status]})`).join(', ')||'아직 시행하지 않음'}</small>${s.episodePosition===2?`<small>묶음 설문: ${person.blocks[s.blockPosition-1].surveyCompleted?'완료':person.pendingSurvey===s.blockPosition?'진행 후 완료 확인 필요':'대기'}</small>`:''}</td><td><button type="button" data-schedule-position="${s.position}">${s.attempts.length?'재시행 준비':'선택 준비'}</button></td></tr>`).join('')}</tbody></table></div>`;
+    $('schedule-table').innerHTML=`<div class="report-table-wrap"><table class="report-table"><thead><tr>${['시나리오 순서 / 묶음','동승자','AI 개입 방식','시나리오 유형','시나리오 식별자','실제 시행 / 설문 상태','직접 선택'].map(s=>`<th scope="col">${s}</th>`).join('')}</tr></thead><tbody>${person.steps.map(s=>`<tr${s.position===person.nextPosition?' class="schedule-next-row"':''}><td>${s.position}${s.position===person.nextPosition?' · 다음':''}${s.blockPosition?`<small>묶음 ${s.blockPosition}/${person.blocks.length} · ${s.episodePosition}/2</small>`:''}</td><td>${RELATION_CODES[s.relationship]}</td><td>${METHOD_CODES[s.intervention]}</td><td>${s.family?`${s.family==='place'?'장소':'정보'} / `:''}${poiLabels[s.poi]}</td><td>${escape(scenarioId(s))}</td><td>${statusLabels[s.status]}<small>${s.attempts.map(a=>`시행 ${a.number}${a.selection==='manual'?' · 수동':''} (${({ended:'종료',aborted:'중단',prepared:'준비',running:'진행'})[a.status]})`).join(', ')||'아직 시행하지 않음'}</small>${s.episodePosition===2?`<small>묶음 설문: ${person.blocks[s.blockPosition-1].surveyCompleted?'완료':person.pendingSurvey===s.blockPosition?'진행 후 완료 확인 필요':'대기'}</small>`:''}</td><td><button type="button" data-schedule-position="${s.position}">${s.attempts.length?'재시행 준비':'선택 준비'}</button></td></tr>`).join('')}</tbody></table></div>`;
     update();
   }
   function update(){const state=getSnapshot()?.state,active=['prepared','running'].includes(state?.trial?.status),person=selected();
@@ -55,7 +56,7 @@ export function initSchedules({getAuth,getSnapshot,command,isBusy,isConnected}){
     if(['prepared','running'].includes(state?.trial?.status)||!isConnected()||state?.suspended)return;
     // Invalidate old audio assets through the normal condition-change event.
     $('participant').value=person.participant;
-    for(const [id,value] of Object.entries({relationship:step.relationship,intervention:step.intervention,scenario:step.scenario}))$(id).value=value;
+    for(const [id,value] of Object.entries({relationship:step.relationship,intervention:step.intervention,scenario:scenarioId(step)}))$(id).value=value;
     $('scenario').dispatchEvent(new Event('change',{bubbles:true}));
     const schedule={planId:plan.id,position:step.position};
     if(manual){schedule.selection='manual';schedule.reason=$('schedule-reason').value.trim();}

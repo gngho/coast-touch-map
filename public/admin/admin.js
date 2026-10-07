@@ -1,3 +1,4 @@
+import {scenarioLabel,cueDelay} from '../cue-timing.js';
 import {load,save,request,endpoint} from '/sync.js';
 import {createNotice,versionNotice} from './notice.js';
 import {initAudio} from './audio.js';
@@ -9,7 +10,7 @@ import {initializeAiPreview} from './ai-preview.js';
 const $=id=>document.getElementById(id);
 const updateAiPreview=initializeAiPreview($('preview-icon'));
 const UI_VERSION='2.9.6';
-const relations={friend:'FR · 친구',partner:'연인 (이전 배정)',coworker:'BU · 직장 관계'},methods={reactive:'RA',cue:'PC',suggestion:'PS',direct:'PD'};
+const relations={friend:'FR',partner:'연인 (이전 배정)',coworker:'BU'},methods={reactive:'RA',cue:'PC',suggestion:'PS',direct:'PD'};
 const icons={idle:'Idle',twinkle:'Twinkle',listening:'Listening',thinking:'Thinking',speaking:'Speaking'};
 const statuses={prepared:'준비 완료',running:'진행 중',ended:'종료',aborted:'중단'};
 const eventLabels={survey_completed:'묶음 설문 완료',audio_connection_delayed:'재생 중 연결 응답 지연',audio_connection_restored:'재생 중 연결 응답 복구',schedule_created:'라틴스퀘어 배정표 저장',prepare:'시행 준비',start:'시행 시작',end:'시행 종료',abort:'시행 중단',setup:'준비 모드 복귀',arm_reactive:'Reactive 터치 준비',reactive_ready:'iPad Reactive 터치 준비',reactive_touch:'Reactive 아이콘 터치',finish_audio:'재생 완료 · Idle',stop_audio:'재생 정지 · Idle',show_cue:'Twinkle 표시 요청',set_icon:'아이콘 상태 변경',applied:'iPad 화면 적용',cue_displayed:'iPad Cue 표시',cue_touch:'Cue 터치',suspend:'안전 대기',resume:'연결 재개',note:'메모',connection_lost:'연결 끊김',visibility_hidden:'iPad 화면 비활성'};
@@ -33,7 +34,7 @@ function render(){
   $('recover').hidden=!!auth;$('unpair').hidden=!snapshot?.paired;$('unpair').disabled=!!active||busy;
   $('resume').hidden=!s?.suspended;$('resume').disabled=!ready;
   $('trial-fields').disabled=!!active||busy;
-  if(active){$('participant').value=t.participant;$('relationship').value=t.relationship;$('intervention').value=t.intervention;$('scenario').value=t.scenario;}
+  if(active){$('participant').value=t.participant;$('relationship').value=t.relationship;$('intervention').value=t.intervention;$('scenario').value=scenarioLabel(t.scenario);}
   $('prepare').disabled=!ready||!!active;
   $('start').disabled=!control||t?.status!=='prepared'||!snapshot?.applied;
   $('end').disabled=!control||!active||!!t?.schedule&&t.status!=='running';
@@ -47,11 +48,11 @@ function render(){
   $('trial-number').textContent=t?`시행 ${String(t.number).padStart(2,'0')}`:'다음 시행 01';
   $('trial-status').textContent=s?.mode==='setup'?'준비 모드':statuses[t?.status]||'대기';
   $('current-condition').textContent=t?`${relations[t.relationship]} · ${methods[t.intervention]}`:'조건을 선택해 주세요';
-  $('current-participant').textContent=t?`${t.participant}${t.scenario?' / '+t.scenario:''}`:'시행을 준비하면 적용 상태를 확인할 수 있습니다.';
+  $('current-participant').textContent=t?`${t.participant}${t.scenario?' / '+scenarioLabel(t.scenario):''}`:'시행을 준비하면 적용 상태를 확인할 수 있습니다.';
   $('applied').textContent=!connected?'확인 불가':snapshot?.applied?'적용 완료':'명령 전달 중';
   $('touched').textContent=['cue','reactive'].includes(t?.intervention)?(s?.touched?'터치됨':s?.touchReady?'터치 대기':'준비 전'):'해당 없음';
   $('pending').textContent=!connected?'확인 불가':`${snapshot?.pendingEvents||0}건`;
-  const icon=icons[s?.icon]?s.icon:'idle';
+  const icon=s?.icon==='twinkle'&&cueDelay(snapshot)>0?'listening':icons[s?.icon]?s.icon:'idle';
   $('icon-state').textContent=icons[icon];updateAiPreview(icon);
   document.querySelectorAll('[data-export]').forEach(b=>b.disabled=!auth||busy);
   if(snapshot?.recentEvents){$('events').replaceChildren(...snapshot.recentEvents.map(e=>{const li=document.createElement('li'),time=document.createElement('time'),span=document.createElement('span');time.textContent=new Date(e.server_time).toLocaleTimeString('ko-KR',{hour12:false});let payload;try{payload=JSON.parse(e.payload);}catch{payload={};}span.textContent=(eventLabels[e.type]||e.type)+(payload.clip?' · '+({chime:'AI 발화 전 알림음',cue_chime:'정보 제공 가능 알림음',dialogue:'동승자 대화',prompt:'제안 질문',answer:'최종 답변'}[payload.clip]||payload.clip):'')+(payload.icon?' · '+icons[payload.icon]:'')+(e.type==='note'?' · '+payload.note:'')+(['cue_touch','reactive_touch'].includes(e.type)?` · ${payload.accepted?'수락':'지연 기록'} · ${Math.round(payload.reactionMs)} ms`:'');li.append(time,span);return li;}));}

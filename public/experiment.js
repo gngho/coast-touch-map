@@ -1,16 +1,19 @@
 import {initializeAiWidget} from './ai.js';
 import {load,save,request,endpoint,Outbox} from './sync.js';
 import {WARN_MS,LOST_MS,singleFlight} from './connection.js';
+import {cueDelay} from './cue-timing.js';
 export function initializeExperiment(coast){
   const $=id=>document.getElementById(id), pageId=crypto.randomUUID(),outbox=new Outbox();
   let auth=load('coast.device.v2'),snapshot=null,lastSuccess=0,needsRejoin=!!auth,reason='reload',lastApplied=-1,resetTrial=null;
   let display=null,pendingTouch=null,order=Date.now(),storageOK=true,polling=false,rejoinId=crypto.randomUUID(),superseded=false;
   let pending=0,lastError=null,gapDiagnostics=null;
+  let cueTimer=null,cueTimerId=null,cueDue=false;
+  function clearCueTimer(){if(cueTimer!==null)clearTimeout(cueTimer);cueTimer=null;cueTimerId=null;cueDue=false;}
   const diagnostics=cause=>({cause,localAgeMs:lastSuccess?performance.now()-lastSuccess:0,peerAgeMs:snapshot?.adminAgeMs,pendingEvents:pending,lastError});
   function loseConnection(cause){if(needsRejoin)return;gapDiagnostics=diagnostics(cause);needsRejoin=true;reason='connection_gap';safeIdle();void enqueue('connection_lost',{diagnostics:gapDiagnostics}).catch(()=>{});}
   const ai=initializeAiWidget({onTouch:touch});
   function setup(){ai.setMode(false);ai.setVisible(true);ai.setTouchEnabled?.(true);$('settings-open').hidden=false;}
-  function safeIdle(){ai.setVisible(true);ai.setState('idle');ai.setTouchEnabled?.(false);display=null;pendingTouch=null;}
+  function safeIdle(){clearCueTimer();ai.setVisible(true);ai.setState('idle');ai.setTouchEnabled?.(false);display=null;pendingTouch=null;}
   function status(text){$('pair-status').textContent=text;}
   function mode(experiment){ai.setMode(experiment);$('settings-open').hidden=experiment;if(experiment&&$('settings').open)$('settings').close();try{save('coast.experiment-mode',experiment);}catch{}}
   if(auth&&load('coast.experiment-mode',false)){mode(true);safeIdle();}else setup();
@@ -26,6 +29,13 @@ export function initializeExperiment(coast){
   async function apply(next){
     if(snapshot&&next.state.generation<snapshot.state.generation)return;
     snapshot=next;const s=next.state,experiment=s.mode==='experiment';mode(experiment);
+    const scheduled=experiment&&!s.suspended&&!needsRejoin&&storageOK&&s.trial?.status==='running'&&s.icon==='twinkle'&&!s.touched&&s.cueAt;
+    if(!scheduled||cueTimerId!==s.cueId)clearCueTimer();
+    if(scheduled&&!cueDue&&cueDelay(next)>0){
+      ai.setState('listening');ai.setTouchEnabled?.(false);
+      if(!cueTimer){cueTimerId=s.cueId;cueTimer=setTimeout(()=>{cueTimer=null;cueDue=true;if(!document.hidden)void apply(snapshot);},cueDelay(next));}
+      return;
+    }
     if(s.trial?.id!==resetTrial&&s.trial?.status==='prepared'){coast.reset();resetTrial=s.trial.id;}
     if(s.suspended||needsRejoin||!storageOK){safeIdle();}
     else if(!experiment){setup();display=null;pendingTouch=null;}

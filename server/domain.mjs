@@ -55,7 +55,9 @@ export function transition(previous,action,data,context){
     const cue=action==='show_cue';
     requireThat(s.trial?.status==='running'&&s.trial.intervention===(cue?'cue':'reactive')&&!s.suspended,'현재 조건에서 터치를 준비할 수 없습니다.',409);
     requireThat(!s.cueId,'이 시행의 터치 기회는 이미 준비했습니다. 재실행은 새 시행으로 시작해 주세요.',409);
-    s.cueId=context.newId;s.touched=false;s.touchReady=true;s.icon=cue?'twinkle':'idle';advance();event.payload={cueId:s.cueId,icon:s.icon};
+    s.cueId=context.newId;s.touched=false;s.touchReady=true;s.icon=cue?'twinkle':'idle';
+    s.cueAt=cue&&data.synchronizeCue===true?now+1200:null;
+    advance();event.payload={cueId:s.cueId,icon:s.icon,cueAt:s.cueAt};
   }else if(action==='set_icon'){
     requireThat(s.trial?.status==='running'&&!s.suspended,'진행 중인 시행에서만 변경할 수 있습니다.',409);
     requireThat(['idle','listening','thinking','speaking'].includes(data.icon),'잘못된 아이콘 상태입니다.');

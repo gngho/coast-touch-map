@@ -302,7 +302,7 @@ test('all four flows start dialogue before Listening, require linked touch and r
       await completed;
       assert.equal(flow.phase,'complete');assert.equal(f.state.icon,'idle');assert.equal(f.state.audioRun.status,'complete');
       assert.deepEqual(clips,intervention==='suggestion'?['dialogue','prompt','answer']:['dialogue','answer']);
-      assert.equal(waits.filter(ms=>ms===180).length,intervention==='suggestion'?2:1);assert.ok(waits.every(ms=>ms>=0&&ms<=1000));
+      assert.equal(waits.filter(ms=>ms===180).length,intervention==='suggestion'?2:1);assert.ok(waits.every(ms=>ms>=0&&ms<=1200));
       assert.deepEqual(states,({reactive:['idle','idle','thinking','speaking','idle'],cue:['listening','twinkle','speaking','idle'],suggestion:['listening','thinking','speaking','listening','thinking','speaking','idle'],direct:['listening','thinking','speaking','idle']})[intervention]);
       assert.equal(events.filter(x=>x==='audio_flow_complete').length,1);
       const exported=(await f.call(f.path('export?format=json'),{auth:f.admin})).result;

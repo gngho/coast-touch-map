@@ -1,6 +1,7 @@
 export function load(key,fallback=null){try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}}
 export function save(key,value){localStorage.setItem(key,JSON.stringify(value));}
 export async function request(path,{auth,method='GET',data,role='admin'}={}){
+  const sentAt=performance.now();
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),2500);
   try{
     const response=await fetch(path,{method,cache:'no-store',signal:controller.signal,headers:{...(method==='POST'?{'Content-Type':'application/json'}:{}),...(auth?{'X-Coast-Token':auth.token,'X-Coast-Role':role}:{})},...(data?{body:JSON.stringify(data)}:{})});
@@ -9,7 +10,8 @@ export async function request(path,{auth,method='GET',data,role='admin'}={}){
       const error=new Error('서버 응답을 읽지 못했습니다. 연결 상태를 다시 확인합니다.');
       error.status=response.status;if(response.status>=500)error.code='SERVER_UNAVAILABLE';throw error;
     }
-    if(!response.ok){const error=new Error(result.error||'요청에 실패했습니다.');error.status=response.status;if(response.status>=500)error.code='SERVER_UNAVAILABLE';throw error;}return result;
+    if(!response.ok){const error=new Error(result.error||'요청에 실패했습니다.');error.status=response.status;if(response.status>=500)error.code='SERVER_UNAVAILABLE';throw error;}
+    if(Number.isFinite(result?.serverTime)){const receivedAt=performance.now();result._timing={receivedAt,roundTrip:receivedAt-sentAt};}return result;
   }catch(error){
     if(controller.signal.aborted){
       const timeout=new Error('서버 응답이 지연되어 요청 결과를 확인하지 못했습니다. 연결 상태를 확인해 주세요.');
