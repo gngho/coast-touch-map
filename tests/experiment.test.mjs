@@ -6,6 +6,7 @@ import {RELATIONSHIPS,INTERVENTIONS} from '../server/domain.mjs';
 import {DESIGN} from '../public/admin/schedule-model.js';
 import {summaryRows} from '../public/admin/report-model.js';
 import {AudioFlow} from '../public/admin/audio-flow.js';
+import {requestCommand} from '../public/admin/command-request.js';
 const uid=()=>crypto.randomUUID();
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 async function fixture(){
@@ -218,9 +219,9 @@ test('connection timeout blocks normal controls, permits abort, preserves record
 test('heartbeat distinguishes warning from lost peer and preserves sanitized rejoin diagnostics',async()=>{
   const f=await fixture();try{
     await f.start();
-    await f.DB.prepare('UPDATE sessions SET admin_seen=? WHERE id=?').bind(Date.now()-4000,f.admin.id).run();
+    await f.DB.prepare('UPDATE sessions SET admin_seen=? WHERE id=?').bind(Date.now()-6000,f.admin.id).run();
     const read=()=>f.call(f.path('state?pageId='+f.pageId),{auth:f.device,role:'device'});
-    let r=await read();assert.equal(r.result.adminConnected,false);assert.equal(r.result.adminAlive,true);assert.ok(r.result.adminAgeMs>=4000);
+    let r=await read();assert.equal(r.result.adminConnected,false);assert.equal(r.result.adminAlive,true);assert.ok(r.result.adminAgeMs>=6000);
     await f.DB.prepare('UPDATE sessions SET admin_seen=? WHERE id=?').bind(Date.now()-11000,f.admin.id).run();
     r=await read();assert.equal(r.result.adminAlive,false);
     const rejoin=await f.call(f.path('rejoin'),{auth:f.device,role:'device',data:{id:uid(),pageId:f.pageId,reason:'connection_gap',diagnostics:{cause:'local_timeout',localAgeMs:10100,lastError:'REQUEST_TIMEOUT',secret:'omit'}}});
@@ -367,4 +368,37 @@ test('paired survey gate persists, rejects early/wrong completion and duplicate 
   const events=exported.events.filter(e=>e.type==='survey_completed');assert.equal(events.length,1);assert.equal(events[0].trial_id,null);
   assert.equal((await prepare(3)).status,200);
  }finally{f.close();}
+});
+
+
+test('lost response after a committed icon change recovers without a second generation or event',async()=>{
+  const f=await fixture();try{
+    await f.start('friend','direct');
+    const id=uid(),before=f.state.generation;
+    let calls=0;
+    const result=await requestCommand(f.path('command'),{data:{id,action:'set_icon',icon:'listening',baseGeneration:before}},{wait:async()=>{},send:async(path,options)=>{
+      calls++;const r=await f.call(path,{auth:f.admin,data:options.data});assert.equal(r.status,200);
+      if(calls===1)throw Object.assign(Error('response lost after commit'),{code:'REQUEST_TIMEOUT'});
+      return r.result;
+    }});
+    assert.equal(calls,2);assert.equal(result.state.generation,before+1);
+    const rows=await f.DB.prepare('SELECT id FROM events WHERE id=?').bind(id).all();assert.equal(rows.results.length,1);
+  }finally{f.close();}
+});
+
+test('frequent state reads throttle heartbeats but preserve fresh state and pending counts',async t=>{
+  let time=Date.now();t.mock.method(Date,'now',()=>time);
+  const f=await fixture();try{
+    const changes=async()=>(await f.DB.prepare('SELECT total_changes() AS n').first()).n;
+    const before=await changes();
+    for(let i=0;i<50;i++){time+=10;await f.refresh();}
+    assert.equal(await changes(),before);
+    time+=1000;await f.refresh();assert.equal(await changes(),before+1);
+    const read=()=>f.call(f.path('state?pageId='+f.pageId+'&pending=2'),{auth:f.device,role:'device'});
+    const first=await read();assert.equal(first.result.pendingEvents,2);const after=await changes();
+    await read();assert.equal(await changes(),after);
+    assert.equal((await f.command('prepare',{participant:'TEST',relationship:'friend',intervention:'direct',scenario:'restaurant'})).status,200);
+    const next=await read();assert.equal(next.result.state.trial.status,'prepared');
+    time+=11000;assert.equal((await read()).result.adminAlive,false);
+  }finally{f.close();}
 });

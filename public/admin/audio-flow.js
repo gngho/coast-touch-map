@@ -35,7 +35,8 @@ export class AudioFlow {
   }
   async control(action,data,epoch){
     if(!await this.awaitReady(epoch))return;
-    const result=await this.command(action,{...data,runId:this.run.id,trialId:this.run.trialId});
+    const result=await this.command(action,{...data,runId:this.run.id,trialId:this.run.trialId},{isCurrent:()=>this.valid(epoch),onRetry:detail=>this.emit('audio_command_retry',detail)});
+    if(!this.valid(epoch))return;
     const armed=['show_cue','arm_reactive'].includes(action);
     if(armed)this.armedCueId=result?.state?.cueId||this.snapshot?.state.cueId;
     // Scheduled Cue onset must not wait for the post-render ACK round trip.
@@ -68,7 +69,7 @@ export class AudioFlow {
     const run=this.run;
     this.set('claiming','재생 준비 중');
     try{
-      await this.claim(run);
+      await this.claim(run,{isCurrent:()=>this.valid(epoch)});
       if(!this.valid(epoch)){
         this.resetIcon(run,true);
         await this.log('audio_flow_stopped',{reason:'재생 시작 확인 전에 흐름이 취소되었습니다.'},run);return false;
@@ -164,9 +165,10 @@ export class AudioFlow {
   }
   fail(error,epoch){
     if(!this.valid(epoch))return;
+    const phase=this.phase;
     ++this.epoch;this.stop();this.set('error',(error.message||'음원을 재생하지 못했습니다.')+' 재실행은 새 시행으로 준비하세요.');
     this.resetIcon();
-    void this.emit('audio_flow_error',{message:String(error.message||error).slice(0,1000)}).catch(()=>{});
+    void this.emit('audio_flow_error',{message:String(error.message||error).slice(0,1000),phase,code:error.code,status:error.status,action:error.action,commandId:error.commandId,attempts:error.attempts,ray:error.ray,elapsedMs:error.elapsedMs,...this.diagnostics}).catch(()=>{});
   }
   resetIcon(run=this.run,claimed=this.claimed){
     if(!claimed||this.snapshot?.state.suspended||this.snapshot?.state.audioRun?.status==='stopped'||this.snapshot?.state.trial?.id!==run?.trialId||this.snapshot.state.trial.status!=='running')return;

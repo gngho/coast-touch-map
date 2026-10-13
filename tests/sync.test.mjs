@@ -8,6 +8,13 @@ function noticeFixture(){
   return {element,classes,messages:createNotice(element)};
 }
 
+test('Access expiry is distinguished from transport failure and HTTP errors retain a trace ID',async t=>{
+  t.mock.method(globalThis,'fetch',async()=>new Response('<html>Login</html>',{status:401,headers:{'cf-ray':'test-ICN'}}));
+  await assert.rejects(request('/api/status'),e=>e.code==='AUTHENTICATION_REQUIRED'&&e.status===401&&e.ray==='test-ICN');
+  globalThis.fetch.mock.mockImplementation(async()=>new Response('Gateway failure',{status:503,headers:{'cf-ray':'gateway-ICN'}}));
+  await assert.rejects(request('/api/status'),e=>e.status===503&&e.ray==='gateway-ICN'&&Number.isFinite(e.elapsedMs));
+});
+
 test('actual request timeout is Korean and a successful status request clears its error styling',async t=>{
   t.mock.timers.enable({apis:['setTimeout']});
   t.mock.method(globalThis,'fetch',(_path,{signal})=>new Promise((resolve,reject)=>{

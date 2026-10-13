@@ -36,8 +36,8 @@ export function initAudio({getAuth,getSnapshot,command,refresh}){
     finally{flushing=false;render();}
   }
   const flow=new AudioFlow({
-    claim:run=>command('begin_audio',{id:run.id,pageId:run.pageId,delayMs:run.delayMs,assets:Object.fromEntries(Object.entries(run.assets).map(([key,a])=>[key,a.meta]))},true),
-    command:(action,data)=>command(action,data,true),play,stop,log,
+    claim:(run,options)=>command('begin_audio',{id:run.id,pageId:run.pageId,delayMs:run.delayMs,assets:Object.fromEntries(Object.entries(run.assets).map(([key,a])=>[key,a.meta]))},true,options),
+    command:(action,data,options)=>command(action,data,true,options),play,stop,log,
     chime:started=>{chimeAsset||=createChime(ctx());return play(chimeAsset,()=>started(chimeAsset.meta));},
     changed:()=>{render();refresh();}
   });

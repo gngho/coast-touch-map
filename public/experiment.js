@@ -97,7 +97,7 @@ export function initializeExperiment(coast){
         safeIdle();const result=await request(endpoint(auth,'rejoin'),{auth,role:'device',method:'POST',data:{id:rejoinId,pageId,reason,diagnostics:gapDiagnostics,clientTime:new Date().toISOString()}});
         needsRejoin=false;rejoinId=crypto.randomUUID();lastApplied=-1;pendingTouch=null;lastSuccess=performance.now();await apply(result);
       }
-      const result=await request(endpoint(auth,`state?pageId=${pageId}&pending=${pending}`),{auth,role:'device'});
+      const result=await request(endpoint(auth,`state?pageId=${pageId}&pending=${pending}`),{auth,role:'device',timeoutMs:4500});
       lastSuccess=performance.now();
       if(result.state.mode==='experiment'&&!result.state.suspended&&!(result.adminAlive??result.adminConnected)){snapshot=result;loseConnection('admin_timeout');return;}
       await apply(result);

@@ -189,3 +189,18 @@ test('cancelling in the post-chime gap never plays the AI voice',async()=>{
   let release;const f=fixture('direct',{wait:ms=>ms===180?new Promise(r=>release=r):Promise.resolve()});
   const begin=f.begin();await tick();assert.equal(f.flow.phase,'chime');f.flow.cancel();release();await begin;assert.deepEqual(f.clips,['dialogue']);
 });
+
+
+test('a transient Listening response failure retries while dialogue continues, then advances once',async()=>{
+  const {requestCommand}=await import('../public/admin/command-request.js');
+  let calls=0,stops=0;const f=fixture('direct',{stop:()=>stops++});
+  f.flow.command=async(action,data,options)=>{
+    if(data.icon!=='listening')return;
+    return requestCommand('/command',{data:{id:'fixed',action,...data}},{...options,wait:async()=>{},send:async()=>{
+      calls++;if(calls===1)throw Object.assign(Error('lost'),{code:'REQUEST_TIMEOUT'});
+      return {};
+    }});
+  };
+  await f.begin();assert.equal(stops,0);assert.equal(calls,2);assert.equal(f.flow.phase,'complete');
+  assert.deepEqual(f.clips,['dialogue','answer']);assert.equal(f.events.filter(e=>e.type==='audio_command_retry').length,1);
+});

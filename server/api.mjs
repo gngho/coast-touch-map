@@ -32,7 +32,7 @@ async function scheduledPreparation(db,row,data){
   return {...data,schedule:{planId:plan.id,design:plan.config.design,seed:plan.config.seed,allocationIndex:person.allocationIndex,block:person.block,row:person.row,caseVariant:person.caseVariant,position:step.position,condition:step.condition,poi:step.poi,blockPosition:step.blockPosition,episodePosition:step.episodePosition,family:step.family,subtype:step.subtype,pairOrder:step.pairOrder,selection:manual?'manual':'next',reason:manual?(ref.reason||''):null,previousAttemptIds:step.attempts.map(a=>a.id),expectedNextPosition:person.nextPosition}};
 }
 function view(row){const s=rowState(row),stamp=now(),deviceAgeMs=Math.max(0,stamp-row.device_seen),adminAgeMs=Math.max(0,stamp-row.admin_seen);return {id:row.id,state:s,version:VERSION,serverTime:stamp,paired:!!row.device_hash,deviceAgeMs,adminAgeMs,deviceConnected:!!row.device_hash&&deviceAgeMs<WARN_MS,adminConnected:adminAgeMs<WARN_MS,adminAlive:adminAgeMs<LOST_MS,applied:row.applied_generation===s.generation&&(row.applied_trial||null)===(s.trial?.id||null),appliedGeneration:row.applied_generation,pendingEvents:row.pending_events};}
-function diagnostics(value){const v=value||{},out={};for(const key of ['localAgeMs','peerAgeMs','pendingEvents'])if(Number.isFinite(v[key])&&v[key]>=0)out[key]=Math.round(Math.min(v[key],86400000));if(['REQUEST_TIMEOUT','CONNECTION_ERROR','HTTP_ERROR'].includes(v.lastError))out.lastError=v.lastError;if(['local_timeout','admin_timeout','visibility'].includes(v.cause))out.cause=v.cause;return out;}
+function diagnostics(value){const v=value||{},out={};for(const key of ['localAgeMs','peerAgeMs','pendingEvents'])if(Number.isFinite(v[key])&&v[key]>=0)out[key]=Math.round(Math.min(v[key],86400000));if(['REQUEST_TIMEOUT','CONNECTION_ERROR','SERVER_UNAVAILABLE','AUTHENTICATION_REQUIRED','HTTP_ERROR'].includes(v.lastError))out.lastError=v.lastError;if(['local_timeout','admin_timeout','visibility'].includes(v.cause))out.cause=v.cause;return out;}
 async function body(request){requireThat(Number(request.headers.get('content-length')||0)<32768,'요청이 너무 큽니다.',413);const text=await request.text();requireThat(text.length<32768,'요청이 너무 큽니다.',413);try{return JSON.parse(text);}catch{throw new Problem('요청 형식이 올바르지 않습니다.');}}
 async function authorized(db,id,user,secret,role){
   const row=await first(db,'SELECT * FROM sessions WHERE id=? AND owner=?',id,user);
@@ -116,8 +116,11 @@ export async function api(request,env){
       if(role==='device'){
         requireThat(url.searchParams.get('pageId')===row.page_id,'다른 화면이 연결되었습니다. 다시 연결해 주세요.',409);
         const count=Math.max(0,Math.min(10000,Number(url.searchParams.get('pending'))||0));
-        await query(db,'UPDATE sessions SET device_seen=?,pending_events=? WHERE id=?',stamp,count,id).run();row.device_seen=stamp;row.pending_events=count;
-      }else{await query(db,'UPDATE sessions SET admin_seen=? WHERE id=?',stamp,id).run();row.admin_seen=stamp;}
+        if(stamp-row.device_seen>=1000||count!==row.pending_events)
+          await query(db,'UPDATE sessions SET device_seen=?,pending_events=? WHERE id=? AND device_seen<=?',stamp,count,id,stamp).run();
+      }else if(stamp-row.admin_seen>=1000){
+        await query(db,'UPDATE sessions SET admin_seen=? WHERE id=? AND admin_seen<=?',stamp,id,stamp).run();
+      }
       row=await first(db,'SELECT * FROM sessions WHERE id=?',id);
       const response=view(row);
       if(role==='admin')response.recentEvents=(await query(db,'SELECT type,server_time,payload FROM events WHERE session_id=? ORDER BY server_time DESC,id DESC LIMIT 12',id).all()).results;
@@ -142,7 +145,7 @@ export async function api(request,env){
     if(operation==='audio-event'&&post){
       requireThat(role==='admin','진행자만 재생 기록을 전송할 수 있습니다.',403);
       requireThat(validId(data.id)&&validId(data.runId)&&validId(data.pageId),'재생 이벤트를 확인해 주세요.');
-      requireThat(['audio_started','audio_ended','operator_confirm','audio_flow_complete','audio_flow_stopped','audio_flow_error','audio_connection_delayed','audio_connection_restored'].includes(data.type),'지원하지 않는 재생 이벤트입니다.');
+      requireThat(['audio_started','audio_ended','operator_confirm','audio_flow_complete','audio_flow_stopped','audio_flow_error','audio_connection_delayed','audio_connection_restored','audio_command_retry'].includes(data.type),'지원하지 않는 재생 이벤트입니다.');
       const run=await first(db,"SELECT trial_id,payload FROM events WHERE id=? AND session_id=? AND type='begin_audio'",data.runId,id);
       if(!run){
         const reset=rowState(await first(db,'SELECT * FROM sessions WHERE id=?',id)).resetGeneration||0;

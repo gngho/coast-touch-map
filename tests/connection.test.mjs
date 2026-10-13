@@ -4,12 +4,13 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {connectionHealth,WARN_MS,LOST_MS,singleFlight} from '../public/connection.js';
 const tick=()=>new Promise(r=>setImmediate(r));
-test('3s locks controls, 10s ends grace; peer age advances even when a cached snapshot reports connected',()=>{
+test('5s locks controls, 10s ends grace; peer age advances even when a cached snapshot reports connected',()=>{
   const s={paired:true,deviceAgeMs:100,deviceConnected:true};
   assert.equal(connectionHealth(s,100,200).ready,true);
-  assert.equal(connectionHealth(s,100,3100).ready,false);assert.equal(connectionHealth(s,100,3100).alive,true);
+  assert.equal(connectionHealth(s,100,4000).ready,true);
+  assert.equal(connectionHealth(s,100,5100).ready,false);assert.equal(connectionHealth(s,100,3100).alive,true);
   assert.equal(connectionHealth(s,100,10000).alive,false);
-  assert.equal(connectionHealth({...s,deviceAgeMs:3500},100,200).ready,false);
+  assert.equal(connectionHealth({...s,deviceAgeMs:5500},100,200).ready,false);
   assert.equal(connectionHealth(s,null,100).alive,false);
   assert.equal(connectionHealth({...s,paired:false},100,100).alive,false);
 });

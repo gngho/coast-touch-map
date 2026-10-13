@@ -1,5 +1,5 @@
-// Warning/command lock at 3 s; interrupt an in-flight stimulus only at 10 s.
-export const WARN_MS=3000, LOST_MS=10000;
+// Allow brief WAN jitter; a sustained loss still stops the stimulus at 10 s.
+export const WARN_MS=5000, LOST_MS=10000;
 export function connectionHealth(snapshot,lastSuccess,now){
   const localAgeMs=lastSuccess==null?Infinity:Math.max(0,now-lastSuccess);
   const peerAgeMs=snapshot?.deviceAgeMs==null?(snapshot?.deviceConnected?0:Infinity):snapshot.deviceAgeMs;
