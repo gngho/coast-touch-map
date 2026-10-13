@@ -11,9 +11,12 @@ const first=(db,sql,...args)=>query(db,sql,...args).first();
 const now=()=>Date.now();
 const wasReset=async(db,id,generation)=>generation<(rowState(await first(db,'SELECT * FROM sessions WHERE id=?',id)).resetGeneration||0);
 async function schedules(db,sessionId){
-  const plans=(await query(db,"SELECT id,payload FROM events WHERE session_id=? AND type='schedule_created' ORDER BY server_time,id",sessionId).all()).results;
-  const prepared=(await query(db,"SELECT e.payload,t.id,t.number,t.participant,t.status FROM events e JOIN trials t ON e.trial_id=t.id AND e.session_id=t.session_id WHERE e.session_id=? AND e.type='prepare'",sessionId).all()).results;
-  const surveys=(await query(db,"SELECT payload FROM events WHERE session_id=? AND type='survey_completed'",sessionId).all()).results.map(e=>JSON.parse(e.payload));
+  const [planRows,preparedRows,surveyRows]=await Promise.all([
+    query(db,"SELECT id,payload FROM events WHERE session_id=? AND type='schedule_created' ORDER BY server_time,id",sessionId).all(),
+    query(db,"SELECT e.payload,t.id,t.number,t.participant,t.status FROM events e JOIN trials t ON e.trial_id=t.id AND e.session_id=t.session_id WHERE e.session_id=? AND e.type='prepare'",sessionId).all(),
+    query(db,"SELECT payload FROM events WHERE session_id=? AND type='survey_completed'",sessionId).all()
+  ]);
+  const plans=planRows.results,prepared=preparedRows.results,surveys=surveyRows.results.map(e=>JSON.parse(e.payload));
   return plans.map(row=>{const plan=JSON.parse(row.payload),attempts=prepared.flatMap(t=>{const ref=JSON.parse(t.payload).schedule;return ref?.planId===row.id?[{id:t.id,number:t.number,participant:t.participant,status:t.status,position:ref.position,selection:ref.selection,reason:ref.reason}]:[];});return {...plan,participants:planProgress(plan.config,attempts,surveys.filter(s=>s.planId===row.id))};});
 }
 async function scheduledPreparation(db,row,data){

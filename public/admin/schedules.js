@@ -1,10 +1,13 @@
-import {request,endpoint} from '/sync.js';
+import {endpoint} from '/sync.js';
+import {requestSchedule,retryableRead} from './schedule-request.js';
 import {DESIGN,DESIGN_NOTE,CASE_LABELS,validateConfig,planProgress,designInfo,RELATION_CODES,METHOD_CODES} from './schedule-model.js';
 const scenarioId=step=>step.subtype||step.poi;
 import {escape,toCsv,kst,relationships,interventions} from './report-model.js';
 const poiLabels=CASE_LABELS,statusLabels={complete:'완료',active:'준비/진행 중',retry:'중단 · 재시도 필요',pending:'대기'};
-export function initSchedules({getAuth,getSnapshot,command,isBusy,isConnected}){
-  const $=id=>document.getElementById(id);let plans=[],preview=null,loading=false,lastKey='',revision=0;
+export function initSchedules({getAuth,getSnapshot,command,isBusy,isConnected,diagnostic=()=>{}}){
+  const $=id=>document.getElementById(id);let plans=[],preview=null,loading=false,loadedKey=null,revision=0,inflight=null,preferredPlan=null,nextRetryAt=0,observedAuth=null;
+  const stateKey=()=>{const s=getSnapshot()?.state;return `${getAuth()?.id||''}|${s?.resetGeneration||0}|${s?.trial?.id||''}|${s?.trial?.status||''}|${s?.schedule?.id||''}|${s?.lastSurvey?.completedAt||''}`;};
+  const stale=()=>loadedKey!==stateKey();
   $('schedule-note').textContent=DESIGN_NOTE;$('schedule-seed').value=crypto.randomUUID().slice(0,8);
   const current=()=>preview||plans.find(p=>p.id===$('schedule-plan').value);
   const selected=()=>current()?.participants.find(p=>p.participant===$('schedule-person').value);
@@ -22,25 +25,38 @@ export function initSchedules({getAuth,getSnapshot,command,isBusy,isConnected}){
     update();
   }
   function update(){const state=getSnapshot()?.state,active=['prepared','running'].includes(state?.trial?.status),person=selected();
+    if(observedAuth!==getAuth()?.token){observedAuth=getAuth()?.token;loadedKey=null;nextRetryAt=0;}
     $('schedule-save').disabled=!getAuth()||loading||isBusy()||active;
     $('schedule-load').disabled=!getAuth()||loading;
-    $('schedule-next').disabled=!!preview||!current()||!person?.nextPosition||loading||isBusy()||active||!isConnected()||!!state?.suspended;
+    $('schedule-next').disabled=!!preview||stale()||!current()||!person?.nextPosition||loading||isBusy()||active||!isConnected()||!!state?.suspended;
     $('schedule-next').textContent=person?.pendingSurvey?`묶음 ${person.pendingSurvey} 설문 대기`:person?.nextPosition?`다음 시나리오 준비 · ${person.nextPosition}/${person.steps.length}`:'배정 시행 모두 완료';
     $('schedule-survey').hidden=!person?.pendingSurvey;
-    $('schedule-survey').disabled=!!preview||loading||isBusy()||active||!person?.pendingSurvey;
+    $('schedule-survey').disabled=!!preview||stale()||loading||isBusy()||active||!person?.pendingSurvey;
     $('schedule-survey').textContent=`묶음 ${person?.pendingSurvey||''} 설문 완료 확인`;
     $('schedule-csv').disabled=!current();
-    document.querySelectorAll('[data-schedule-position]').forEach(button=>{button.disabled=!!preview||loading||isBusy()||active||!isConnected()||!!state?.suspended;});
-    const key=`${state?.trial?.id||''}|${state?.trial?.status||''}|${state?.schedule?.id||''}|${state?.lastSurvey?.completedAt||''}`;
-    if(key!==lastKey){lastKey=key;if($('schedule-section').open&&!preview&&!loading)void refresh();}
+    document.querySelectorAll('[data-schedule-position]').forEach(button=>{button.disabled=!!preview||stale()||loading||isBusy()||active||!isConnected()||!!state?.suspended;});
+    if(stale()&&$('schedule-section').open&&!preview&&!loading&&!isBusy()&&Date.now()>=nextRetryAt)void refresh();
   }
-  async function refresh(preferred){if(loading||!getAuth())return;loading=true;const v=revision;update();
-    try{const auth=getAuth(),result=await request(endpoint(auth,'schedule'),{auth});if(v!==revision||auth.token!==getAuth()?.token)return;
+  function refresh(preferred){
+    if(preferred)preferredPlan=preferred;
+    if(loading)return inflight;
+    if(!getAuth())return Promise.resolve(false);
+    loading=true;nextRetryAt=0;const v=revision,key=stateKey(),auth=getAuth();loadedKey=null;update();message('배정표 진행 상태를 확인하고 있습니다…');
+    inflight=(async()=>{try{
+      const result=await requestSchedule(endpoint(auth,'schedule'),{auth,isCurrent:()=>v===revision&&auth.token===getAuth()?.token&&!preview,onRetry:detail=>{diagnostic('schedule_retry',detail);message('배정표 응답 지연 · 자동으로 다시 확인하고 있습니다…');}});
+      if(v!==revision||auth.token!==getAuth()?.token||preview)return false;
+      if(key!==stateKey()){message('시행 상태가 변경되어 최신 배정표를 다시 확인합니다…');return false;}
       plans=result.plans;preview=null;const keep=preferred||$('schedule-plan').value;
       $('schedule-plan').replaceChildren(...plans.map((p,i)=>new Option(`배정표 ${i+1} · ${p.config.participants.length}명 · ${p.config.seed} · ${kst(p.createdAt).slice(0,16)}`,p.id)));
-      $('schedule-plan').value=plans.some(p=>p.id===keep)?keep:plans.at(-1)?.id||'';
+      const wanted=preferredPlan||keep;preferredPlan=null;
+      $('schedule-plan').value=plans.some(p=>p.id===wanted)?wanted:plans.at(-1)?.id||'';
+      loadedKey=key;nextRetryAt=0;
       showPeople();message(plans.length?'배정표와 실제 시행 진행 상태를 불러왔습니다.':'저장된 배정표가 없습니다. 참가자 ID를 확인하고 저장하세요.');
-    }catch(e){message('배정표 조회 실패: '+e.message);}finally{loading=false;update();}
+      return true;
+    }catch(e){if(v!==revision||auth.token!==getAuth()?.token||preview)return false;
+      diagnostic('schedule_error',e);nextRetryAt=retryableRead(e)?Date.now()+5000:Infinity;
+      message('배정표 최신 상태 확인 실패: '+e.message+(retryableRead(e)?' 기존 표를 유지하고 잠시 후 자동 재조회합니다.':' 다시 로그인하거나 배정표 다시 불러오기를 눌러 주세요.'));return false;
+    }finally{loading=false;inflight=null;update();}})();return inflight;
   }
   $('schedule-fill').onclick=()=>{try{fillIds();message('ID 목록을 채웠습니다. 미리보기 후 저장하세요.');}catch(e){message(e.message);}};
   $('schedule-preview').onclick=()=>{try{const c=config();preview={config:c,participants:planProgress(c)};showPeople();message('미리보기입니다. 서버에 저장해야 시행을 준비할 수 있습니다.');}catch(e){message(e.message);}};
@@ -51,7 +67,7 @@ export function initSchedules({getAuth,getSnapshot,command,isBusy,isConnected}){
   $('schedule-section').addEventListener('toggle',()=>{if($('schedule-section').open&&!preview)void refresh();});
   async function prepareStep(position,manual=false){
     const plan=current(),person=selected(),step=person?.steps.find(s=>s.position===position);
-    if(!plan||!step||preview||loading||isBusy())return;
+    if(!plan||!step||preview||stale()||loading||isBusy())return;
     const state=getSnapshot()?.state;
     if(['prepared','running'].includes(state?.trial?.status)||!isConnected()||state?.suspended)return;
     // Invalidate old audio assets through the normal condition-change event.
@@ -61,7 +77,8 @@ export function initSchedules({getAuth,getSnapshot,command,isBusy,isConnected}){
     const schedule={planId:plan.id,position:step.position};
     if(manual){schedule.selection='manual';schedule.reason=$('schedule-reason').value.trim();}
     try{await command('prepare',{participant:person.participant,relationship:step.relationship,intervention:step.intervention,scenario:step.scenario,schedule},true);
-      await refresh(plan.id);message(person.participant+' · 순서 '+step.position+(manual?' 수동 선택':'')+' 조건을 준비했습니다. 음원을 다시 선택하고 iPad 적용 확인 후 시작하세요.');
+      if(await refresh(plan.id))message(person.participant+' · 순서 '+step.position+(manual?' 수동 선택':'')+' 조건을 준비했습니다. 음원을 다시 선택하고 iPad 적용 확인 후 시작하세요.');
+      else message('시행 준비는 서버에 저장됐습니다. 배정표 최신 상태를 다시 확인 중입니다. 같은 시나리오를 중복 준비하지 마세요.');
     }catch(error){message(error.message);}
   }
   $('schedule-next').onclick=()=>{if(!$('schedule-next').disabled)void prepareStep(selected()?.nextPosition);};
@@ -72,10 +89,10 @@ export function initSchedules({getAuth,getSnapshot,command,isBusy,isConnected}){
   $('schedule-survey').onclick=async()=>{
     if($('schedule-survey').disabled)return;
     const plan=current(),person=selected();
-    try{await command('complete_survey',{planId:plan.id,participant:person.participant,blockPosition:person.pendingSurvey},true);await refresh(plan.id);message('묶음 설문 완료를 기록했습니다. 다음 조건을 진행할 수 있습니다.');}catch(e){message(e.message);}
+    try{await command('complete_survey',{planId:plan.id,participant:person.participant,blockPosition:person.pendingSurvey},true);if(await refresh(plan.id))message('묶음 설문 완료를 기록했습니다. 다음 조건을 진행할 수 있습니다.');else message('묶음 설문 완료는 서버에 저장됐습니다. 배정표 최신 상태를 다시 확인 중입니다.');}catch(e){message(e.message);}
   };
   $('schedule-csv').onclick=()=>{const plan=current();if(!plan)return;const rows=plan.participants.flatMap(p=>p.steps.map(s=>({'참가자':p.participant,'참가자 배정 번호':p.allocationIndex,'블록':p.block,'라틴 행':p.row,'사례 변형':p.caseVariant,'참가자 내 순서':s.position,'조건 코드':s.condition,'동승자 관계':relationships[s.relationship],'개입 방식':interventions[s.intervention],'묶음 순서':s.blockPosition||'','묶음 내 순서':s.episodePosition||'','시나리오군':s.family==='place'?'장소':s.family==='information'?'정보':'','시나리오 유형':poiLabels[s.poi],'묶음 내 배정 순서':s.pairOrder||'','묶음 설문 완료':s.blockPosition?(p.blocks[s.blockPosition-1].surveyCompleted?'완료':'대기'):'','설문 완료 시각':s.blockPosition?kst(p.blocks[s.blockPosition-1].surveyAt):'','시나리오':scenarioId(s),'저장된 원본 식별자':s.scenario,'수동 선택 시행 번호':s.attempts.filter(a=>a.selection==='manual').map(a=>a.number).join(';'),'수동 선택 사유':s.attempts.filter(a=>a.selection==='manual').map(a=>a.number+': '+(a.reason||'')).join(';'),'진행 상태':statusLabels[s.status],'실제 시행 번호':s.attempts.map(a=>a.number).join(';'),'배정 시드':plan.config.seed,'배정 방식':plan.config.design,'배정표 ID':plan.id||'미저장'})));
     const url=URL.createObjectURL(new Blob([toCsv(rows)],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=`coast-allocation-${plan.config.seed}-${kst(Date.now()).slice(0,10)}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
-  fillIds();return {update,clear(){revision++;plans=[];preview=null;$('schedule-plan').replaceChildren();showPeople();message('기록 초기화로 배정표도 초기화되었습니다.');}};
+  fillIds();return {update,clear(){revision++;loadedKey=null;nextRetryAt=0;preferredPlan=null;plans=[];preview=null;$('schedule-plan').replaceChildren();showPeople();message('기록 초기화로 배정표도 초기화되었습니다.');}};
 }

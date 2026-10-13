@@ -402,3 +402,32 @@ test('frequent state reads throttle heartbeats but preserve fresh state and pend
     time+=11000;assert.equal((await read()).result.adminAlive,false);
   }finally{f.close();}
 });
+
+test('lost responses on next scenario, end and paired survey completion never duplicate or skip progress',async()=>{
+  const f=await fixture();try{
+    const planId=uid();await f.command('create_schedule',{config:{design:DESIGN,seed:'lost-workflow',participants:['P001']}},planId);
+    const person=async()=>(await f.call(f.path('schedule'),{auth:f.admin})).result.plans[0].participants[0];
+    async function lostCommand(action,extra={}){
+      const id=uid();let attempts=0;
+      const result=await requestCommand(f.path('command'),{data:{id,action,baseGeneration:f.state.generation,...extra}},{timeoutMs:4500,budgetMs:14000,wait:async()=>{},send:async(path,options)=>{
+        attempts++;assert.equal(options.timeoutMs,4500);
+        const r=await f.call(path,{auth:f.admin,data:options.data});assert.equal(r.status,200);
+        if(attempts===1)throw Object.assign(Error('committed, response lost'),{code:'REQUEST_TIMEOUT'});
+        return r.result;
+      }});
+      assert.equal(attempts,2);await f.refresh();
+      const events=await f.DB.prepare('SELECT id FROM events WHERE id=?').bind(id).all();assert.equal(events.results.length,1);
+      return result;
+    }
+    for(let position=1;position<=2;position++){
+      const p=await person(),s=p.steps[position-1];assert.equal(p.nextPosition,position);
+      await lostCommand('prepare',{participant:'P001',relationship:s.relationship,intervention:s.intervention,scenario:s.scenario,schedule:{planId,position}});
+      await f.apply();await f.command('start');await lostCommand('end');
+      assert.equal((await person()).steps[position-1].attempts.length,1);
+    }
+    assert.equal((await person()).pendingSurvey,1);
+    await lostCommand('complete_survey',{planId,participant:'P001',blockPosition:1});
+    const final=await person();assert.equal(final.nextPosition,3);assert.equal(final.completedBlocks,1);
+    assert.equal((await f.DB.prepare('SELECT count(*) AS n FROM trials').first()).n,2);
+  }finally{f.close();}
+});

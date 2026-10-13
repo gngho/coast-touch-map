@@ -11,7 +11,7 @@ import {requestCommand} from './command-request.js';
 import {connectionDetail,createDiagnostics} from './connection-diagnostics.js';
 const $=id=>document.getElementById(id);
 const updateAiPreview=initializeAiPreview($('preview-icon'));
-const UI_VERSION='2.9.7';
+const UI_VERSION='2.9.8';
 const relations={friend:'FR',partner:'연인 (이전 배정)',coworker:'BU'},methods={reactive:'RA',cue:'PC',suggestion:'PS',direct:'PD'};
 const icons={idle:'Idle',twinkle:'Twinkle',listening:'Listening',thinking:'Thinking',speaking:'Speaking'};
 const statuses={prepared:'준비 완료',running:'진행 중',ended:'종료',aborted:'중단'};
@@ -77,7 +77,9 @@ async function command(action,extra={},strict=false,options={}){
   if(strict&&busy){const until=performance.now()+3000;while(busy&&performance.now()<until)await new Promise(resolve=>setTimeout(resolve,25));}
   if(busy||!auth||!snapshot){if(strict)throw Error('다른 조작을 처리 중입니다. 상태를 확인해 주세요.');return;}busy=true;render();
   const data={id:crypto.randomUUID(),action,baseGeneration:snapshot.state.generation,...extra};
-  try{const result=await requestCommand(endpoint(auth,'command'),{auth,method:'POST',data},{...options,onRetry:detail=>{diagnostics.record('command_retry',detail,connectionHealth(snapshot,lastSuccess,performance.now()));options.onRetry?.(detail);}});if(!snapshot||result.state.generation>=snapshot.state.generation)snapshot=result;notice('명령을 저장했습니다. iPad의 적용 확인을 기다립니다.');return snapshot;}
+  const label=({prepare:'다음 시나리오 준비',end:'시행 종료',complete_survey:'묶음 설문 완료',create_schedule:'배정표 저장'})[action];
+  if(label)notice(label+' 처리 중입니다. 서버 확인을 기다려 주세요.');
+  try{const result=await requestCommand(endpoint(auth,'command'),{auth,method:'POST',data},{...(label?{timeoutMs:4500,budgetMs:14000}:{}),...options,onRetry:detail=>{diagnostics.record('command_retry',detail,connectionHealth(snapshot,lastSuccess,performance.now()));if(label)notice(label+' 응답 지연 · 중복 실행 없이 처리 결과를 다시 확인합니다.');options.onRetry?.(detail);}});if(!snapshot||result.state.generation>=snapshot.state.generation)snapshot=result;notice(label?label+' 처리 결과를 서버에서 확인했습니다.':'명령을 저장했습니다. iPad의 적용 확인을 기다립니다.');return snapshot;}
   catch(error){diagnostics.record('command_error',error,connectionHealth(snapshot,lastSuccess,performance.now()));messages.error(error);if(strict)throw error;}
   finally{busy=false;render();}
 }
@@ -104,6 +106,6 @@ async function poll(){
 setInterval(()=>{render();if(codeExpiry)$('code-expiry').textContent=Date.now()<codeExpiry?`유효 시간 ${Math.ceil((codeExpiry-Date.now())/1000)}초`:'코드가 만료되었습니다. 다시 생성하세요.';},1000);
 audio=initAudio({getAuth:()=>auth,getSnapshot:()=>snapshot,command,refresh:render});
 const reports=initReports({getAuth:()=>auth});
-schedulesUi=initSchedules({getAuth:()=>auth,getSnapshot:()=>snapshot,command,isBusy:()=>busy,isConnected:()=>connectionHealth(snapshot,lastSuccess,performance.now()).ready});
+schedulesUi=initSchedules({getAuth:()=>auth,getSnapshot:()=>snapshot,command,isBusy:()=>busy,isConnected:()=>connectionHealth(snapshot,lastSuccess,performance.now()).ready,diagnostic:(kind,error)=>diagnostics.record(kind,error,connectionHealth(snapshot,lastSuccess,performance.now()))});
 recordReset=initRecordReset({getSnapshot:()=>snapshot,command,onSuccess:()=>{reports.clear();schedulesUi.clear();$('participant').value='';$('note').value='';notice('기록과 배정표를 초기화했습니다. 다음 시행은 01부터 시작하며 iPad 연결은 유지됩니다.');}});
 boot();
