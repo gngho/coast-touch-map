@@ -20,7 +20,7 @@ function fixture(){
     endpoint:()=>'/schedule',crypto,encodeURIComponent,Option:class{constructor(text,value){this.text=text;this.value=value;}},Event,
     document:{getElementById:element,querySelectorAll:()=>[]},Date:{now:()=>time},console};
   vm.createContext(context);
-  const source=fs.readFileSync(new URL('../public/admin/schedules.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'').replace('export function','function');
+  const source=fs.readFileSync(new URL('../public/admin/schedules.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'').replace('export function','function').replace('fillIds();return {update,','fillIds();return {refresh,update,');
   vm.runInContext(source+'\nglobalThis.initialize=initSchedules;',context);
   const ui=context.initialize({getAuth:()=>({id:'session',token:'test'}),getSnapshot:()=>snapshot,isBusy:()=>busy,isConnected:()=>true,command:async(action)=>{commands.push(action);}});
   return {element,ui,plan,pending,commands,paths,get calls(){return calls;},setState(state){snapshot={state};},advance(ms){time+=ms;},setBusy(value){busy=value;}};
@@ -70,6 +70,7 @@ test('progress refresh scopes the selected plan, retains the catalog, and never 
  f.setState({schedule:{id:'other'},trial:{id:'new',status:'prepared',schedule:{planId:'plan'}}});f.ui.update();
  assert.equal(f.paths.at(-1),'/schedule?planId=plan');
  f.pending.shift().resolve({plans:[f.plan]});await tick();assert.equal(f.element('schedule-plan').children.length,2);
+ const calls=f.calls;await f.ui.refresh('plan');assert.equal(f.calls,calls,'completed automatic refresh is reused by command completion');
  f.element('schedule-plan').value='other';f.element('schedule-plan').onchange();assert.equal(f.paths.at(-1),'/schedule?planId=other');
  f.pending.shift().resolve({plans:[other]});await tick();assert.equal(f.element('schedule-plan').value,'other');
  const explicit=f.element('schedule-load').onclick();assert.equal(f.paths.at(-1),'/schedule');f.pending.shift().resolve({plans:[f.plan,other]});await explicit;

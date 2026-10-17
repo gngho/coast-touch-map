@@ -41,7 +41,7 @@ export function initSchedules({getAuth,getSnapshot,command,isBusy,isConnected,di
     if(preferred)preferredPlan=preferred;
     if(loading)return inflight;
     if(!getAuth())return Promise.resolve(false);
-    if(!force&&!stale()&&(!preferred||preferred===$('schedule-plan').value))return Promise.resolve(true);
+    if(!force&&!stale()&&(!preferred||preferred===$('schedule-plan').value)){preferredPlan=null;return Promise.resolve(true);}
     const selectedPlan=preferred||$('schedule-plan').value;
     const scoped=!force&&plans.some(p=>p.id===selectedPlan)&&plans.some(p=>p.id===getSnapshot()?.state?.schedule?.id||!getSnapshot()?.state?.schedule?.id)?selectedPlan:null;
     loading=true;nextRetryAt=0;const v=revision,key=stateKey(),auth=getAuth();loadedKey=null;update();message('배정표 진행 상태를 확인하고 있습니다…');
@@ -66,7 +66,7 @@ export function initSchedules({getAuth,getSnapshot,command,isBusy,isConnected,di
   $('schedule-form').onsubmit=async e=>{e.preventDefault();if($('schedule-save').disabled)return;
     try{const c=config();preview={config:c,participants:planProgress(c)};showPeople();const result=await command('create_schedule',{config:c},true);preview=null;await refresh(result.state.schedule.id);}catch(error){message(error.message);}
   };
-  $('schedule-load').onclick=()=>refresh(undefined,true);$('schedule-plan').onchange=()=>{preview=null;revision++;loadedKey=null;nextRetryAt=0;showPeople();void refresh();};$('schedule-person').onchange=show;
+  $('schedule-load').onclick=()=>refresh(undefined,true);$('schedule-plan').onchange=()=>{preview=null;preferredPlan=null;revision++;loadedKey=null;nextRetryAt=0;showPeople();void refresh();};$('schedule-person').onchange=show;
   $('schedule-section').addEventListener('toggle',()=>{if($('schedule-section').open&&!preview)void refresh();});
   async function prepareStep(position,manual=false){
     const plan=current(),person=selected(),step=person?.steps.find(s=>s.position===position);
