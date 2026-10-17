@@ -37,16 +37,19 @@ export function initSchedules({getAuth,getSnapshot,command,isBusy,isConnected,di
     document.querySelectorAll('[data-schedule-position]').forEach(button=>{button.disabled=!!preview||stale()||loading||isBusy()||active||!isConnected()||!!state?.suspended;});
     if(stale()&&$('schedule-section').open&&!preview&&!loading&&!isBusy()&&Date.now()>=nextRetryAt)void refresh();
   }
-  function refresh(preferred){
+  function refresh(preferred,force=false){
     if(preferred)preferredPlan=preferred;
     if(loading)return inflight;
     if(!getAuth())return Promise.resolve(false);
+    if(!force&&!stale()&&(!preferred||preferred===$('schedule-plan').value))return Promise.resolve(true);
+    const selectedPlan=preferred||$('schedule-plan').value;
+    const scoped=!force&&plans.some(p=>p.id===selectedPlan)&&plans.some(p=>p.id===getSnapshot()?.state?.schedule?.id||!getSnapshot()?.state?.schedule?.id)?selectedPlan:null;
     loading=true;nextRetryAt=0;const v=revision,key=stateKey(),auth=getAuth();loadedKey=null;update();message('배정표 진행 상태를 확인하고 있습니다…');
     inflight=(async()=>{try{
-      const result=await requestSchedule(endpoint(auth,'schedule'),{auth,isCurrent:()=>v===revision&&auth.token===getAuth()?.token&&!preview,onRetry:detail=>{diagnostic('schedule_retry',detail);message('배정표 응답 지연 · 자동으로 다시 확인하고 있습니다…');}});
+      const result=await requestSchedule(endpoint(auth,'schedule')+(scoped?'?planId='+encodeURIComponent(scoped):''),{auth,isCurrent:()=>v===revision&&auth.token===getAuth()?.token&&!preview,onRetry:detail=>{diagnostic('schedule_retry',detail);message('배정표 응답 지연 · 자동으로 다시 확인하고 있습니다…');}});
       if(v!==revision||auth.token!==getAuth()?.token||preview)return false;
       if(key!==stateKey()){message('시행 상태가 변경되어 최신 배정표를 다시 확인합니다…');return false;}
-      plans=result.plans;preview=null;const keep=preferred||$('schedule-plan').value;
+      plans=scoped?[...plans.filter(p=>p.id!==scoped),...result.plans].sort((a,b)=>a.createdAt-b.createdAt):result.plans;preview=null;const keep=preferred||$('schedule-plan').value||getSnapshot()?.state?.trial?.schedule?.planId||getSnapshot()?.state?.schedule?.id;
       $('schedule-plan').replaceChildren(...plans.map((p,i)=>new Option(`배정표 ${i+1} · ${p.config.participants.length}명 · ${p.config.seed} · ${kst(p.createdAt).slice(0,16)}`,p.id)));
       const wanted=preferredPlan||keep;preferredPlan=null;
       $('schedule-plan').value=plans.some(p=>p.id===wanted)?wanted:plans.at(-1)?.id||'';
@@ -63,7 +66,7 @@ export function initSchedules({getAuth,getSnapshot,command,isBusy,isConnected,di
   $('schedule-form').onsubmit=async e=>{e.preventDefault();if($('schedule-save').disabled)return;
     try{const c=config();preview={config:c,participants:planProgress(c)};showPeople();const result=await command('create_schedule',{config:c},true);preview=null;await refresh(result.state.schedule.id);}catch(error){message(error.message);}
   };
-  $('schedule-load').onclick=()=>refresh();$('schedule-plan').onchange=()=>{preview=null;showPeople();};$('schedule-person').onchange=show;
+  $('schedule-load').onclick=()=>refresh(undefined,true);$('schedule-plan').onchange=()=>{preview=null;revision++;loadedKey=null;nextRetryAt=0;showPeople();void refresh();};$('schedule-person').onchange=show;
   $('schedule-section').addEventListener('toggle',()=>{if($('schedule-section').open&&!preview)void refresh();});
   async function prepareStep(position,manual=false){
     const plan=current(),person=selected(),step=person?.steps.find(s=>s.position===position);

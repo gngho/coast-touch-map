@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {api} from '../server/api.mjs';
+import {schedules} from '../server/api.mjs';
 import {localDatabase} from '../server/dev-db.mjs';
 import {RELATIONSHIPS,INTERVENTIONS} from '../server/domain.mjs';
 import {DESIGN} from '../public/admin/schedule-model.js';
@@ -9,6 +10,27 @@ import {AudioFlow} from '../public/admin/audio-flow.js';
 import {requestCommand} from '../public/admin/command-request.js';
 const uid=()=>crypto.randomUUID();
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
+test('scoped schedule reads preserve allocation positions and isolate plans and participants',async()=>{
+ const f=await fixture();try{
+  const planA=uid(),planB=uid(),config={design:DESIGN,seed:'preserved',participants:['P017','P018','P019']};
+  await f.command('create_schedule',{config},planA);await f.command('create_schedule',{config:{...config,seed:'other'}},planB);
+  const original=await schedules(f.DB,f.admin.id,planA);
+  const step=original[0].participants[1].steps[0];
+  await f.command('prepare',{participant:'P018',relationship:step.relationship,intervention:step.intervention,scenario:step.scenario,schedule:{planId:planA,position:1}});
+  await f.apply();await f.command('start');await f.command('end');
+  const all=await schedules(f.DB,f.admin.id);
+  const scoped=(await f.call(f.path('schedule?planId='+planA+'&participant=P018'),{auth:f.admin})).result.plans;
+  assert.equal(scoped.length,1);assert.deepEqual(scoped[0].participants,[all.find(p=>p.id===planA).participants[1]]);
+  assert.equal(scoped[0].participants[0].completed,1);assert.equal(scoped[0].participants[0].nextPosition,2);
+  assert.equal(all.find(p=>p.id===planB).participants[1].completed,0);
+  const unknown=await f.call(f.path('schedule?planId=missing'),{auth:f.admin});assert.deepEqual(unknown.result.plans,[]);
+  assert.equal((await f.call(f.path('schedule?participant=P018'),{auth:f.admin})).status,400);
+  const count=await f.DB.prepare('SELECT count(*) AS n FROM events').first();
+  await schedules(f.DB,f.admin.id,planA,'P018');assert.deepEqual(await f.DB.prepare('SELECT count(*) AS n FROM events').first(),count);
+  const plans=await f.DB.prepare("EXPLAIN QUERY PLAN SELECT payload FROM events WHERE session_id=? AND type='prepare' AND json_extract(payload,'$.schedule.planId')=? AND json_extract(payload,'$.participant')=?").bind(f.admin.id,planA,'P018').all();
+  assert.ok(plans.results.some(p=>p.detail.includes('events_prepare_plan_person')));
+ }finally{f.close();}
+});
 async function fixture(){
   const DB=localDatabase();let admin,device,pageId=uid(),state;
   async function call(path,{data,auth,role='admin',user='owner',origin='https://coast.test'}={}){

@@ -10,19 +10,24 @@ const query=(db,sql,...args)=>db.prepare(sql).bind(...args);
 const first=(db,sql,...args)=>query(db,sql,...args).first();
 const now=()=>Date.now();
 const wasReset=async(db,id,generation)=>generation<(rowState(await first(db,'SELECT * FROM sessions WHERE id=?',id)).resetGeneration||0);
-async function schedules(db,sessionId){
+export async function schedules(db,sessionId,planId=null,participant=null){
+  // Keep the legacy full-list endpoint; progress checks only read their own plan/person.
+  const scope=planId?[planId,...(participant?[participant]:[])]:[];
+  const preparedScope=planId?" AND json_extract(e.payload,'$.schedule.planId')=?"+(participant?" AND json_extract(e.payload,'$.participant')=?":""):'';
+  const surveyScope=planId?" AND json_extract(payload,'$.planId')=?"+(participant?" AND json_extract(payload,'$.participant')=?":""):'';
   const [planRows,preparedRows,surveyRows]=await Promise.all([
-    query(db,"SELECT id,payload FROM events WHERE session_id=? AND type='schedule_created' ORDER BY server_time,id",sessionId).all(),
-    query(db,"SELECT e.payload,t.id,t.number,t.participant,t.status FROM events e JOIN trials t ON e.trial_id=t.id AND e.session_id=t.session_id WHERE e.session_id=? AND e.type='prepare'",sessionId).all(),
-    query(db,"SELECT payload FROM events WHERE session_id=? AND type='survey_completed'",sessionId).all()
+    query(db,"SELECT id,payload FROM events WHERE session_id=? AND type='schedule_created'"+(planId?' AND id=?':'')+" ORDER BY server_time,id",sessionId,...(planId?[planId]:[])).all(),
+    query(db,"SELECT e.payload,t.id,t.number,t.participant,t.status FROM events e JOIN trials t ON e.trial_id=t.id AND e.session_id=t.session_id WHERE e.session_id=? AND e.type='prepare'"+preparedScope+" ORDER BY t.number,e.id",sessionId,...scope).all(),
+    query(db,"SELECT payload FROM events WHERE session_id=? AND type='survey_completed'"+surveyScope,sessionId,...scope).all()
   ]);
   const plans=planRows.results,prepared=preparedRows.results,surveys=surveyRows.results.map(e=>JSON.parse(e.payload));
-  return plans.map(row=>{const plan=JSON.parse(row.payload),attempts=prepared.flatMap(t=>{const ref=JSON.parse(t.payload).schedule;return ref?.planId===row.id?[{id:t.id,number:t.number,participant:t.participant,status:t.status,position:ref.position,selection:ref.selection,reason:ref.reason}]:[];});return {...plan,participants:planProgress(plan.config,attempts,surveys.filter(s=>s.planId===row.id))};});
+  return plans.map(row=>{const plan=JSON.parse(row.payload),attempts=prepared.flatMap(t=>{const ref=JSON.parse(t.payload).schedule;return ref?.planId===row.id?[{id:t.id,number:t.number,participant:t.participant,status:t.status,position:ref.position,selection:ref.selection,reason:ref.reason}]:[];});return {...plan,participants:planProgress(plan.config,attempts,surveys.filter(s=>s.planId===row.id)).filter(p=>!participant||p.participant===participant)};});
 }
 async function scheduledPreparation(db,row,data){
   const ref=data.schedule;
   requireThat(ref&&validId(ref.planId)&&Number.isInteger(ref.position),'배정표와 순서를 확인해 주세요.');
-  const plans=await schedules(db,row.id),plan=plans.find(p=>p.id===ref.planId),person=plan?.participants.find(p=>p.participant===data.participant);
+  requireThat(typeof data.participant==='string'&&/^[A-Za-z0-9_-]{1,40}$/.test(data.participant),'참가자 ID를 확인해 주세요.');
+  const plans=await schedules(db,row.id,ref.planId,data.participant),plan=plans.find(p=>p.id===ref.planId),person=plan?.participants.find(p=>p.participant===data.participant);
   requireThat(person,'저장된 배정표에서 참가자를 찾을 수 없습니다.',409);
   requireThat(ref.selection===undefined||ref.selection==='manual','잘못된 배정 선택 방식입니다.');
   const manual=ref.selection==='manual';
@@ -53,7 +58,8 @@ async function commit(db,row,eventId,action,data,actor,extra={}){
       if(!['abort','note','unpair','reset_records','complete_survey','create_schedule','stop_audio'].includes(action))requireThat(row.device_hash&&stamp-row.device_seen<WARN_MS,'iPad 연결을 확인해 주세요.',409);
     }
     if(action==='complete_survey'){
-      const plan=(await schedules(db,row.id)).find(p=>p.id===data.planId);
+      requireThat(validId(data.planId)&&typeof data.participant==='string','배정표와 참가자를 확인해 주세요.');
+      const plan=(await schedules(db,row.id,data.planId,data.participant)).find(p=>p.id===data.planId);
       const person=plan?.participants.find(p=>p.participant===data.participant);
       requireThat(person?.blocks&&person.pendingSurvey===data.blockPosition&&Number.isInteger(data.blockPosition),'두 시나리오를 종료한 다음 대기 중인 묶음 설문을 확인해 주세요.',409);
     }
@@ -195,7 +201,10 @@ export async function api(request,env){
     }
     if(operation==='schedule'&&!post){
       requireThat(role==='admin','진행자만 배정표를 조회할 수 있습니다.',403);
-      return json({plans:await schedules(db,id)});
+      const planId=url.searchParams.get('planId'),participant=url.searchParams.get('participant');
+      requireThat(!planId||validId(planId),'배정표 ID를 확인해 주세요.');
+      requireThat(!participant||(planId&&/^[A-Za-z0-9_-]{1,40}$/.test(participant)),'참가자 ID를 확인해 주세요.');
+      return json({plans:await schedules(db,id,planId,participant)});
     }
     if(operation==='export'&&!post){
       requireThat(role==='admin','진행자만 로그를 내보낼 수 있습니다.',403);

@@ -15,15 +15,15 @@ function fixture(){
   const config=model.validateConfig({design:model.DESIGN,seed:'test',participants:['P001']});
   const plan={id:'plan',createdAt:1,config,participants:model.planProgress(config)};
   let snapshot={state:{generation:0,mode:'setup'}},calls=0,time=1000,busy=false;
-  const pending=[],commands=[];
-  const context={...model,...report,requestSchedule:(path,opts)=>requestSchedule(path,{...opts,wait:async()=>{},send:()=>{calls++;return new Promise((resolve,reject)=>pending.push({resolve,reject}));}}),retryableRead,
-    endpoint:()=>'/schedule',crypto,Option:class{constructor(text,value){this.text=text;this.value=value;}},Event,
+  const pending=[],commands=[],paths=[];
+  const context={...model,...report,requestSchedule:(path,opts)=>requestSchedule(path,{...opts,wait:async()=>{},send:()=>{calls++;paths.push(path);return new Promise((resolve,reject)=>pending.push({resolve,reject}));}}),retryableRead,
+    endpoint:()=>'/schedule',crypto,encodeURIComponent,Option:class{constructor(text,value){this.text=text;this.value=value;}},Event,
     document:{getElementById:element,querySelectorAll:()=>[]},Date:{now:()=>time},console};
   vm.createContext(context);
   const source=fs.readFileSync(new URL('../public/admin/schedules.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'').replace('export function','function');
   vm.runInContext(source+'\nglobalThis.initialize=initSchedules;',context);
   const ui=context.initialize({getAuth:()=>({id:'session',token:'test'}),getSnapshot:()=>snapshot,isBusy:()=>busy,isConnected:()=>true,command:async(action)=>{commands.push(action);}});
-  return {element,ui,plan,pending,commands,get calls(){return calls;},setState(state){snapshot={state};},advance(ms){time+=ms;},setBusy(value){busy=value;}};
+  return {element,ui,plan,pending,commands,paths,get calls(){return calls;},setState(state){snapshot={state};},advance(ms){time+=ms;},setBusy(value){busy=value;}};
 }
 
 test('a failed schedule read retries, preserves the visible plan, and refreshes automatically after cooldown',async()=>{
@@ -59,4 +59,18 @@ test('clearing records while a read is pending cannot restore the old plan',asyn
   const f=fixture();const loading=f.element('schedule-load').onclick();f.ui.clear();
   f.pending.shift().resolve({plans:[f.plan]});await loading;
   assert.equal(f.element('schedule-view').hidden,true);assert.equal(f.element('schedule-plan').children.length,0);
+});
+
+test('progress refresh scopes the selected plan, retains the catalog, and never polls an unchanged allocation',async()=>{
+ const f=fixture(),other={...f.plan,id:'other',createdAt:2};
+ f.setState({schedule:{id:'other'},trial:{id:'old',status:'ended',schedule:{planId:'plan'}}});
+ f.element('schedule-section').open=true;f.ui.update();f.pending.shift().resolve({plans:[f.plan,other]});await tick();
+ assert.equal(f.element('schedule-plan').value,'plan','restore the actual trial plan, not the last created plan');
+ for(let i=0;i<20;i++)f.ui.update();assert.equal(f.calls,1);
+ f.setState({schedule:{id:'other'},trial:{id:'new',status:'prepared',schedule:{planId:'plan'}}});f.ui.update();
+ assert.equal(f.paths.at(-1),'/schedule?planId=plan');
+ f.pending.shift().resolve({plans:[f.plan]});await tick();assert.equal(f.element('schedule-plan').children.length,2);
+ f.element('schedule-plan').value='other';f.element('schedule-plan').onchange();assert.equal(f.paths.at(-1),'/schedule?planId=other');
+ f.pending.shift().resolve({plans:[other]});await tick();assert.equal(f.element('schedule-plan').value,'other');
+ const explicit=f.element('schedule-load').onclick();assert.equal(f.paths.at(-1),'/schedule');f.pending.shift().resolve({plans:[f.plan,other]});await explicit;
 });

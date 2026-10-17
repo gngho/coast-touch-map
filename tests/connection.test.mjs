@@ -1,9 +1,15 @@
+import {pollDelay} from '../public/poll-timing.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {connectionHealth,WARN_MS,LOST_MS,singleFlight} from '../public/connection.js';
 const tick=()=>new Promise(r=>setImmediate(r));
+test('idle polling slows down without delaying prepared or running stimulus polls',()=>{
+  for(const status of ['prepared','running'])assert.equal(pollDelay({state:{trial:{status}}}),150);
+  for(const status of ['ended','aborted',undefined])assert.equal(pollDelay({state:{trial:{status}}}),1000);
+  assert.equal(pollDelay(null),1000);
+});
 test('5s locks controls, 10s ends grace; peer age advances even when a cached snapshot reports connected',()=>{
   const s={paired:true,deviceAgeMs:100,deviceConnected:true};
   assert.equal(connectionHealth(s,100,200).ready,true);
@@ -24,7 +30,7 @@ test('participant heartbeat progresses while an event upload remains unresolved'
     load:key=>key==='coast.device.v2'?{id:'s',token:'t'}:false,save(){},localStorage:{removeItem(){}},endpoint:(_,op)=>op,
     Outbox:class{db=Promise.resolve();async put(e){queue.push(e);}async all(){return [...queue];}async remove(id){queue.splice(queue.findIndex(e=>e.id===id),1);}},
     setInterval(){},setTimeout(fn){timers.push(fn);},request:async(path)=>{requests.push(path);if(path==='event')await new Promise(r=>release=r);return structuredClone(snapshot);},structuredClone};
-  vm.createContext(context);vm.runInContext(source+'\ninitializeExperiment({reset(){}});',context);
+  Object.assign(context,{pollDelay});vm.createContext(context);vm.runInContext(source+'\ninitializeExperiment({reset(){}});',context);
   await tick();assert.ok(requests.includes('event'));assert.equal(requests.filter(x=>x.startsWith('state?')).length,1);
   clock+=1000;await timers.shift()();await tick();assert.equal(requests.filter(x=>x.startsWith('state?')).length,2);
   assert.equal(requests.filter(x=>x==='event').length,1,'event loop is single-flight');
@@ -40,7 +46,7 @@ test('touch upload acknowledgement cannot re-arm a Cue while a concurrent state 
     load:key=>key==='coast.device.v2'?{id:'s',token:'t'}:false,save(){},localStorage:{removeItem(){}},endpoint:(_,op)=>op,
     Outbox:class{db=Promise.resolve();async put(e){queue.push(e);}async all(){return [...queue];}async remove(id){queue.splice(queue.findIndex(e=>e.id===id),1);}},
     setInterval(){},setTimeout(fn){timers.push(fn);},request:async(path,options)=>{if(path==='event')sent.push(options.data);return structuredClone(snapshot);},structuredClone};
-  vm.createContext(context);vm.runInContext(source+'\ninitializeExperiment({reset(){}});',context);await tick();
+  Object.assign(context,{pollDelay});vm.createContext(context);vm.runInContext(source+'\ninitializeExperiment({reset(){}});',context);await tick();
   await onTouch();await timers.shift()();await tick();assert.equal(sent.filter(e=>e.type==='touch').length,1);
   await timers.shift()();await tick();await onTouch();await timers.shift()();await tick();
   assert.equal(sent.filter(e=>e.type==='touch').length,1);assert.equal(states.at(-1),'thinking');

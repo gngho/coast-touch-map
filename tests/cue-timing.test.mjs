@@ -1,3 +1,4 @@
+import {pollDelay} from '../public/poll-timing.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {cueDelay,scenarioLabel} from '../public/cue-timing.js';
@@ -26,7 +27,7 @@ test('participant waits until scheduled onset and suspension cancels the pending
    setTimeout(fn,ms){const timer={fn,ms,cleared:false};timers.push(timer);return timer;},clearTimeout:t=>{t.cleared=true;},
    Outbox:class{db=Promise.resolve();async put(e){queue.push(e);events.push(e);}async all(){return [...queue];}async remove(id){queue.splice(queue.findIndex(e=>e.id===id),1);}},
    request:async()=>({...structuredClone(snapshot),serverTime:clock,_timing:{receivedAt:clock,roundTrip:0}})};
-  vm.createContext(context);vm.runInContext(source+'\ninitializeExperiment({reset(){}});',context);
+  Object.assign(context,{pollDelay});vm.createContext(context);vm.runInContext(source+'\ninitializeExperiment({reset(){}});',context);
   const settle=()=>new Promise(r=>setImmediate(r));await settle();
   assert.equal(states.includes('twinkle'),false);assert.equal(events.length,0);
   const onset=timers.find(t=>t.ms===1200);assert.ok(onset);

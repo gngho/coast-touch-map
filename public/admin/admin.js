@@ -9,9 +9,10 @@ import {connectionHealth} from '/connection.js';
 import {initializeAiPreview} from './ai-preview.js';
 import {requestCommand} from './command-request.js';
 import {connectionDetail,createDiagnostics} from './connection-diagnostics.js';
+import {pollDelay} from '../poll-timing.js';
 const $=id=>document.getElementById(id);
 const updateAiPreview=initializeAiPreview($('preview-icon'));
-const UI_VERSION='2.9.8';
+const UI_VERSION='2.9.9';
 const relations={friend:'FR',partner:'연인 (이전 배정)',coworker:'BU'},methods={reactive:'RA',cue:'PC',suggestion:'PS',direct:'PD'};
 const icons={idle:'Idle',twinkle:'Twinkle',listening:'Listening',thinking:'Thinking',speaking:'Speaking'};
 const statuses={prepared:'준비 완료',running:'진행 중',ended:'종료',aborted:'중단'};
@@ -101,7 +102,7 @@ async function poll(){
   if(pollBusy)return;pollBusy=true;
   try{if(!auth)return;const next=await request(endpoint(auth,'state'),{auth,timeoutMs:4500});if(!snapshot||next.state.generation>=snapshot.state.generation)snapshot=next;lastSuccess=performance.now();if(lastConnectionError)diagnostics.record('connection_restored');lastConnectionError=null;messages.connectionRestored();}
   catch(error){lastConnectionError=error;diagnostics.record('state_error',error,connectionHealth(snapshot,lastSuccess,performance.now()));messages.error(error);if(error.status===403){auth=null;localStorage.removeItem('coast.admin.v2');}}
-  finally{pollBusy=false;render();setTimeout(poll,150);}
+  finally{pollBusy=false;render();setTimeout(poll,pollDelay(snapshot));}
 }
 setInterval(()=>{render();if(codeExpiry)$('code-expiry').textContent=Date.now()<codeExpiry?`유효 시간 ${Math.ceil((codeExpiry-Date.now())/1000)}초`:'코드가 만료되었습니다. 다시 생성하세요.';},1000);
 audio=initAudio({getAuth:()=>auth,getSnapshot:()=>snapshot,command,refresh:render});

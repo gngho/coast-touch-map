@@ -1,4 +1,5 @@
 import {sqliteTable, text, integer, index, uniqueIndex} from 'drizzle-orm/sqlite-core';
+import {sql} from 'drizzle-orm';
 export const sessions = sqliteTable('sessions', {
   id: text('id').primaryKey(), owner: text('owner').notNull(),
   adminHash: text('admin_hash').notNull(), codeHash: text('code_hash'), codeExpires: integer('code_expires'),
@@ -18,4 +19,8 @@ export const events = sqliteTable('events', {
   id: text('id').primaryKey(), sessionId: text('session_id').notNull().references(()=>sessions.id), trialId: text('trial_id'),
   type: text('type').notNull(), actor: text('actor').notNull(), serverTime: integer('server_time').notNull(),
   clientTime: text('client_time'), pageId: text('page_id'), generation: integer('generation'), payload: text('payload').notNull(),
-}, t => [index('events_session_time').on(t.sessionId,t.serverTime), index('events_trial').on(t.trialId)]);
+}, t => [index('events_session_time').on(t.sessionId,t.serverTime), index('events_trial').on(t.trialId),
+  index('events_schedule_created').on(t.sessionId,t.serverTime,t.id).where(sql`${t.type}='schedule_created'`),
+  index('events_prepare_plan_person').on(t.sessionId,sql`json_extract(${t.payload},'$.schedule.planId')`,sql`json_extract(${t.payload},'$.participant')`).where(sql`${t.type}='prepare'`),
+  index('events_survey_plan_person').on(t.sessionId,sql`json_extract(${t.payload},'$.planId')`,sql`json_extract(${t.payload},'$.participant')`).where(sql`${t.type}='survey_completed'`),
+]);

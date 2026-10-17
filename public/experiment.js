@@ -2,6 +2,7 @@ import {initializeAiWidget} from './ai.js';
 import {load,save,request,endpoint,Outbox} from './sync.js';
 import {WARN_MS,LOST_MS,singleFlight} from './connection.js';
 import {cueDelay} from './cue-timing.js';
+import {pollDelay} from './poll-timing.js';
 export function initializeExperiment(coast){
   const $=id=>document.getElementById(id), pageId=crypto.randomUUID(),outbox=new Outbox();
   let auth=load('coast.device.v2'),snapshot=null,lastSuccess=0,needsRejoin=!!auth,reason='reload',lastApplied=-1,resetTrial=null;
@@ -103,7 +104,7 @@ export function initializeExperiment(coast){
       await apply(result);
       if(!result.adminConnected)status('진행자 연결 응답 지연 · 복구 확인 중');
     }catch(error){lastError=error.code||'HTTP_ERROR';status(error.message);if(error.status===409&&error.message.includes('다른 화면')){superseded=true;safeIdle();}if(error.status===403){safeIdle();auth=null;snapshot=null;needsRejoin=false;localStorage.removeItem('coast.device.v2');mode(false);setup();$('pair-form').hidden=false;status('연결이 해제되었습니다. 새 연결 코드를 입력하세요.');}}
-    finally{polling=false;void flush();void flushCritical();void flushApplied();setTimeout(tick,150);}
+    finally{polling=false;void flush();void flushCritical();void flushApplied();setTimeout(tick,pollDelay(snapshot));}
   }
   setInterval(()=>{
     if(auth&&!superseded&&!needsRejoin&&lastSuccess){const age=performance.now()-lastSuccess;if(age>=LOST_MS)loseConnection('local_timeout');else if(age>=WARN_MS)status('연결 응답 지연 · 복구 확인 중');}
