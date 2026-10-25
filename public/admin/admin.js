@@ -12,7 +12,7 @@ import {connectionDetail,createDiagnostics} from './connection-diagnostics.js';
 import {pollDelay} from '../poll-timing.js';
 const $=id=>document.getElementById(id);
 const updateAiPreview=initializeAiPreview($('preview-icon'));
-const UI_VERSION='2.9.9';
+const UI_VERSION='2.9.10';
 const relations={friend:'FR',partner:'연인 (이전 배정)',coworker:'BU'},methods={reactive:'RA',cue:'PC',suggestion:'PS',direct:'PD'};
 const icons={idle:'Idle',twinkle:'Twinkle',listening:'Listening',thinking:'Thinking',speaking:'Speaking'};
 const statuses={prepared:'준비 완료',running:'진행 중',ended:'종료',aborted:'중단'};

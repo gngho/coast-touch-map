@@ -76,10 +76,25 @@ test('hard timeout during a soft-delay wait cancels and never resumes a queued a
 });
 
 
-test('dialogue starts before Listening command and does not wait for applied audit ACK',async()=>{
-  const order=[];const f=fixture('suggestion',{play:async(asset,started)=>{order.push(asset.meta.name);await started();},command:async(action,data)=>{order.push(data.icon||action);return {state:{generation:3}};}});
-  f.snapshot.state.generation=3;f.snapshot.applied=false;
-  await f.begin();assert.deepEqual(order.slice(0,2),['dialogue','listening']);assert.equal(f.flow.phase,'response_wait');
+test('all conditions listen during dialogue after playback starts without waiting for applied audit ACK',async()=>{
+  for(const mode of ['reactive','cue','suggestion','direct']){
+    let finishDialogue;const order=[];
+    const f=fixture(mode,{play:async(asset,started)=>{
+      order.push(asset.meta.name);await started();
+      if(asset.meta.name==='dialogue')await new Promise(resolve=>finishDialogue=resolve);
+    }});
+    const command=f.flow.command;
+    f.flow.command=async(action,data)=>{
+      order.push(data.icon||action);await command(action,data);
+      if(action==='set_icon')return {state:{generation:3}};
+    };
+    f.snapshot.state.generation=3;f.snapshot.applied=false;
+    const begin=f.begin();await tick();
+    assert.deepEqual(order,['dialogue','listening']);assert.equal(f.flow.phase,'dialogue');
+    assert.equal(f.flow.canConfirm,false);assert.equal(await f.flow.confirm('Space'),false);
+    finishDialogue();await begin;
+    assert.equal(f.flow.phase,({reactive:'reactive_wait',cue:'cue_wait',suggestion:'response_wait',direct:'complete'})[mode]);
+  }
 });
 
 test('cancellation while claiming stops a late successful claim without playing',async()=>{
