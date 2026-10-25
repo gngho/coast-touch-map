@@ -133,3 +133,9 @@ Direct의 대화 종료 후 무입력 답변, 진행자 새로고침 후 기존 
 - Cloudflare dry-run과 Sites 번들 빌드 통과. Cloudflare 검증에서는 도구 설정·로그 경로만 임시 디렉터리로 지정. 운영 배포와 DB 마이그레이션은 실행하지 않음.
 - 앱·관리자 버전을 2.9.10으로 갱신하여 새 시행 로그에서 변경 전후를 구분. 기존 시행 기록과 DB 스키마 변경 없음.
 - 이번 검증은 자동 테스트와 빌드 범위. 로컬 서버 실행은 실행 환경의 loopback 포트 권한 제한으로 확인하지 못했으며 실제 iPad Safari·TV 음향·현장 실험은 재검증하지 않음. 배포 후 시행 사이에 두 기기를 모두 새로고침해야 함.
+
+## 2.9.11 Reactive 대화 종료 후 Idle (2026-10-25)
+
+- Reactive의 대화 중 Listening은 유지하고, 대화 종료 후 터치 준비 시 Idle로 전환. 수락된 터치 후 Listening 요청 발화 → 진행자 확인 → Thinking → Speaking 답변 → Idle 순서.
+- 전체 자동 테스트 95개 통과. 실제 API/SQLite와 AudioFlow 통합에서 대화 중 Listening·터치 비활성, 대화 종료 후 Idle·터치 활성, 터치 후 Listening·중복 수락 방지, 진행자 확인 후 답변과 최종 Idle을 검증.
+- Sites 번들과 Cloudflare dry-run 빌드 통과. 앱·관리자 버전 2.9.11. 기존 시행 기록과 DB 스키마 변경 없음. 실제 iPad·TV 재생은 이번 자동 검증 범위에 포함하지 않음.
