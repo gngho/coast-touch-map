@@ -131,7 +131,7 @@ export class AudioFlow {
       this.emit('audio_started',{clip:kind,asset:asset.meta,clock:'pc_source_start_call'});
       if(kind==='dialogue'){
         // Send Listening only AFTER source.start(), never before the dialogue.
-        visual=this.icon(this.run.intervention==='reactive'?'idle':'listening',epoch);
+        visual=this.icon('listening',epoch);
         void visual.catch(error=>this.fail(error,epoch));
       }
     });
