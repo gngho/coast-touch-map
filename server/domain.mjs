@@ -1,5 +1,5 @@
 import {validateConfig} from '../public/admin/schedule-model.js';
-export const VERSION = '2.9.10';
+export const VERSION = '2.9.11';
 export const RELATIONSHIPS = ['friend','partner','coworker'];
 export const INTERVENTIONS = ['reactive','cue','suggestion','direct'];
 export class Problem extends Error { constructor(message,status=400){super(message);this.status=status;} }
@@ -55,7 +55,7 @@ export function transition(previous,action,data,context){
     const cue=action==='show_cue';
     requireThat(s.trial?.status==='running'&&s.trial.intervention===(cue?'cue':'reactive')&&!s.suspended,'현재 조건에서 터치를 준비할 수 없습니다.',409);
     requireThat(!s.cueId,'이 시행의 터치 기회는 이미 준비했습니다. 재실행은 새 시행으로 시작해 주세요.',409);
-    s.cueId=context.newId;s.touched=false;s.touchReady=true;s.icon=cue?'twinkle':'listening';
+    s.cueId=context.newId;s.touched=false;s.touchReady=true;s.icon=cue?'twinkle':'idle';
     s.cueAt=cue&&data.synchronizeCue===true?now+1200:null;
     advance();event.payload={cueId:s.cueId,icon:s.icon,cueAt:s.cueAt};
   }else if(action==='set_icon'){
@@ -71,7 +71,7 @@ export function transition(previous,action,data,context){
     s.audioRun.status=action==='finish_audio'?'complete':'stopped';idle();advance();event.payload={runId:data.runId,icon:'idle'};
   }else if(action==='touch'){
     const reactive=s.trial?.intervention==='reactive';
-    const accepted=s.trial?.id===data.trialId&&s.trial?.status==='running'&&['reactive','cue'].includes(s.trial.intervention)&&data.touchKind===(reactive?'reactive_ready':'cue_displayed')&&s.cueId===data.cueId&&s.touchReady&&!s.touched&&!s.suspended&&s.icon===(reactive?'listening':'twinkle')&&data.generation===s.generation;
+    const accepted=s.trial?.id===data.trialId&&s.trial?.status==='running'&&['reactive','cue'].includes(s.trial.intervention)&&data.touchKind===(reactive?'reactive_ready':'cue_displayed')&&s.cueId===data.cueId&&s.touchReady&&!s.touched&&!s.suspended&&s.icon===(reactive?'idle':'twinkle')&&data.generation===s.generation;
     event.type=data.touchKind==='reactive_ready'?'reactive_touch':'cue_touch';event.payload={cueId:data.cueId,accepted,reactionMs:data.reactionMs,displayEventId:data.displayEventId};
     if(accepted){s.activation={id:context.eventId,at:now,pageId:data.pageId,trialId:s.trial.id,cueId:s.cueId,runId:s.audioRun?.id||null};s.touched=true;s.touchReady=false;s.icon=reactive?'listening':'thinking';advance();}
   }else if(action==='suspend'){

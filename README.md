@@ -1,6 +1,11 @@
 # Coast — 차량 AI 상호작용 실험
 
-iPad 참가자용 내비게이션 자극과 PC 진행자용 관리자 화면을 포함한 연구용 웹앱입니다. 현재 화면·서버 버전은 **2.9.10**입니다. package.json의 2.0.0은 초기 패키지 버전입니다.
+iPad 참가자용 내비게이션 자극과 PC 진행자용 관리자 화면을 포함한 연구용 웹앱입니다. 현재 화면·서버 버전은 **2.9.11**입니다. package.json의 2.0.0은 초기 패키지 버전입니다.
+
+## 2.9.11 Reactive 대화 종료 후 Idle
+
+- Reactive는 Listening 대화 → Idle 터치 대기 → 아이콘 터치 → Listening 요청 발화 → 진행자 확인 → Thinking → Speaking 답변 → Idle로 진행합니다.
+- 대화 재생 중 Listening은 유지하고, 대화 종료 시에만 Idle로 전환해 터치를 받습니다. 적용 후 시행 사이에 PC와 iPad를 모두 새로고침하세요.
 
 ## 2.9.10 Reactive 대화 중 Listening
 
@@ -50,7 +55,7 @@ iPad 참가자용 내비게이션 자극과 PC 진행자용 관리자 화면을 
 - [참가자 화면 · iPad](https://coast-touch-map.rudgh0862.workers.dev/)
 - [관리자 화면 · PC](https://coast-touch-map.rudgh0862.workers.dev/admin)
 
-두 기기 모두 위 Cloudflare 주소를 사용하고 허용된 계정으로 로그인합니다. 이 소스의 관리자 버전은 **2.9.10**입니다. GitHub `main`에 반영한 변경은 Cloudflare Workers Builds를 통해 자동 배포됩니다.
+두 기기 모두 위 Cloudflare 주소를 사용하고 허용된 계정으로 로그인합니다. 이 소스의 관리자 버전은 **2.9.11**입니다. GitHub `main`에 반영한 변경은 Cloudflare Workers Builds를 통해 자동 배포됩니다.
 
 이전 `chatgpt.site` 주소는 별도 배포본이며 현재 변경이 반영되지 않습니다. 기존 즐겨찾기는 위 주소로 교체하세요.
 
@@ -82,7 +87,7 @@ npm start
 
 | 조건 | Idle 준비 상태 이후 |
 |---|---|
-| Reactive | Listening 대화 → 아이콘 터치 → Listening 요청 발화 → 진행자 확인 → Thinking → Speaking 답변 → Idle |
+| Reactive | Listening 대화 → Idle 아이콘 터치 → Listening 요청 발화 → 진행자 확인 → Thinking → Speaking 답변 → Idle |
 | Cue | Listening 대화 → Twinkle → 아이콘 터치 → Thinking → Speaking 답변 → Idle |
 | Suggestion | Listening 대화 → Thinking → Speaking 제안 → Listening 응답 → 진행자 확인 → Thinking → Speaking 답변 → Idle |
 | Direct | Listening 대화 → Thinking → Speaking 답변 → Idle |
