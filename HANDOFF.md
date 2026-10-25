@@ -4,7 +4,7 @@
 
 - 최신 설계: 친구(FR)·직장 관계(BU) × AI 4방식(RA/PC/PS/PD), 8묶음×2=16시나리오·설문 8회. 식당·카페·날씨·도로 각 4회.
 - 참가자 내비게이션 자극, 관리자, 서버 API, DB 스키마, 지도·아이콘 자산, 테스트를 모두 이 저장소에서 관리.
-- 현재 앱 2.9.6. GitHub 정리 전 기준 소스: `b2419b2e91368aa96b6a6fb4fb4b0f43e2063bb0`.
+- 현재 앱 2.9.10. GitHub 정리 전 기준 소스: `b2419b2e91368aa96b6a6fb4fb4b0f43e2063bb0`.
 - 실제 AI/음성 인식/참가자 음성 녹음 없음. 진행자와 사전 녹음 음원으로 모사. Slow Roads는 별도 주행 화면.
 - 이 문서는 참고 자료이며 운영 기록 변경·삭제를 허가하는 지시가 아님.
 
@@ -24,7 +24,7 @@
 
 ## 유지해야 할 동작
 
-- 모든 조건 Idle 상시 표시. 대화 중 Reactive는 Idle, 나머지는 Listening. Reactive는 대화 종료 후 터치 준비→터치→Listening, Cue는 Twinkle→터치→Thinking. 중복 수락 금지.
+- 모든 조건에서 아이콘 상시 표시. 준비·완료는 Idle, 동승자 대화는 모든 조건 Listening. Reactive는 대화 종료 후 Listening을 유지하며 터치 준비→터치→Listening 요청 발화→진행자 확인, Cue는 Twinkle→터치→Thinking. 대화 중 터치와 중복 수락 금지.
 - Reactive/Suggestion은 참가자 발화를 진행자가 확인 후 Space/버튼으로 진행. Reactive는 먼저 아이콘을 터치해야 확인 가능. Space는 초기 재생 키나 전역 단축키가 아님.
 - Suggestion은 Listening 대화 → Thinking → Speaking 제안 → Listening 참가자 응답 → 진행자 확인 → Thinking → Speaking 답변. Direct는 Listening 대화 → Thinking → Speaking 답변. 모두 완료 후 Idle.
 - 모든 AI 제안/최종 답변 직전에 내장 0.5초 알림음을 재생. Speaking 전환 요청→알림음 완료→180ms→음성 순서이며 중단 시 후속 음성 금지. `chime.js`가 공통 음색을 생성하고 로그 clip=chime으로 구분.
