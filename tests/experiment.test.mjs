@@ -170,7 +170,7 @@ test('a simultaneous new trial and reset cannot erase a newly prepared trial',as
     if(f.state.trial){assert.equal(f.state.trial.participant,'P002');assert.equal(exported.result.trials.length,2);}else assert.equal(exported.result.trials.length,0);
   }finally{f.close();}
 });
-test('12 conditions share four visible states; only Cue can Twinkle and Reactive can arm Idle',async()=>{
+test('12 conditions share four visible states; only Cue can Twinkle and Reactive arms Listening',async()=>{
   const f=await fixture();try{
     for(const relationship of RELATIONSHIPS)for(const intervention of INTERVENTIONS){
       await f.start(relationship,intervention);assert.equal(f.state.icon,'idle');
@@ -182,6 +182,7 @@ test('12 conditions share four visible states; only Cue can Twinkle and Reactive
       const result=await f.command('show_cue');assert.equal(result.status,intervention==='cue'?200:409);
       if(intervention==='cue')assert.equal(f.state.icon,'twinkle');
       assert.equal((await f.command('arm_reactive')).status,intervention==='reactive'?200:409);
+      if(intervention==='reactive'){assert.equal(f.state.icon,'listening');assert.equal(f.state.touchReady,true);}
       await f.command('end');assert.equal(f.state.icon,'idle');
     }
     const exported=await f.call(f.path('export?format=json'),{auth:f.admin});
@@ -308,11 +309,17 @@ test('all four flows start dialogue before Listening, require linked touch and r
         await f.refresh();
         const expected=asset.meta.name==='dialogue'?'idle':'speaking';
         assert.equal(f.state.icon,expected);clips.push(asset.meta.name);await started();
+        if(asset.meta.name==='dialogue'){
+          await tick();await f.refresh();
+          assert.equal(f.state.icon,'listening');assert.equal(f.state.touchReady,false);
+          assert.equal(flow.canConfirm,false);
+        }
       },chime:async started=>{assert.equal(f.state.icon,flow.phase==='cue_chime'?'twinkle':'speaking');await started({name:'ai-chime-v3',duration:.5});},stop(){},log:async type=>events.push(type),changed(){if(['complete','error','stopped'].includes(flow.phase))finish();},now:()=>0,wait:async ms=>waits.push(ms)});
       await sync();const assets=Object.fromEntries(['dialogue','prompt','answer'].map(k=>[k,{meta:{name:k,duration:1,sha256:'a'.repeat(64)}}]));
       assert.equal(await flow.begin({trial:f.state.trial,assets,delayMs:1000,pageId:uid()}),true);
       if(['reactive','cue'].includes(intervention)){
         assert.equal(f.state.touchReady,true);assert.equal(flow.canConfirm,false);
+        assert.equal(f.state.icon,intervention==='reactive'?'listening':'twinkle');
         const id=uid(),shown={cueId:f.state.cueId,generation:f.state.generation};
         await f.event(intervention==='cue'?'cue_displayed':'reactive_ready',{id,...shown,monotonicMs:100});
         const touch={...shown,displayEventId:id,reactionMs:200};
@@ -326,7 +333,7 @@ test('all four flows start dialogue before Listening, require linked touch and r
       assert.equal(flow.phase,'complete');assert.equal(f.state.icon,'idle');assert.equal(f.state.audioRun.status,'complete');
       assert.deepEqual(clips,intervention==='suggestion'?['dialogue','prompt','answer']:['dialogue','answer']);
       assert.equal(waits.filter(ms=>ms===180).length,intervention==='suggestion'?2:1);assert.ok(waits.every(ms=>ms>=0&&ms<=1200));
-      assert.deepEqual(states,({reactive:['idle','idle','thinking','speaking','idle'],cue:['listening','twinkle','speaking','idle'],suggestion:['listening','thinking','speaking','listening','thinking','speaking','idle'],direct:['listening','thinking','speaking','idle']})[intervention]);
+      assert.deepEqual(states,({reactive:['listening','listening','thinking','speaking','idle'],cue:['listening','twinkle','speaking','idle'],suggestion:['listening','thinking','speaking','listening','thinking','speaking','idle'],direct:['listening','thinking','speaking','idle']})[intervention]);
       assert.equal(events.filter(x=>x==='audio_flow_complete').length,1);
       const exported=(await f.call(f.path('export?format=json'),{auth:f.admin})).result;
       assert.equal(exported.events.filter(e=>['cue_touch','reactive_touch'].includes(e.type)&&e.payload.accepted).length,['reactive','cue'].includes(intervention)?1:0);
@@ -356,6 +363,7 @@ test('server refuses AI response before a current participant touch and stores a
       await f.command('begin_audio',{pageId:uid(),delayMs:500,assets:{dialogue:asset,answer:asset}},runId);
       for(const icon of ['thinking','speaking'])assert.equal((await f.command('set_icon',{icon,runId,trialId})).status,409);
       await f.command(mode==='cue'?'show_cue':'arm_reactive',{runId,trialId});
+      assert.equal(f.state.icon,mode==='reactive'?'listening':'twinkle');
       assert.equal((await f.command('set_icon',{icon:'speaking',runId,trialId})).status,409);
       const displayId=uid(),id=uid(),cueId=f.state.cueId;
       await f.event(mode==='cue'?'cue_displayed':'reactive_ready',{id:displayId,cueId,monotonicMs:100});
